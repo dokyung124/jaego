@@ -406,26 +406,14 @@
   // ------------------------------------------------------------------
   function photosCard(it) {
     const photos = it.photos || [];
-    if (!it.details_fetched_at) return '<p class="muted" style="margin:0;">판매글의 사진 전체와 소비기한은 다음 동기화 때 불러와요.</p>';
-    if (photos.length < 2) {
-      return `<p class="muted" style="margin:0;">${esc(it.photo_note || '판매글에서 사진을 1장만 찾았어요')}</p>`;
-    }
-    const how = {
-      ai: 'AI가 고른 실물 앞면 사진이에요.',
-      auto: '화면 캡처를 뺀 실물 사진 중 첫 번째예요.',
-      manual: '직접 고른 사진이에요.',
-      pending: '대표 사진을 고를 차례예요. 다음 동기화 때 골라요.',
-      ai_pending: 'AI가 고를 차례예요. 무료 한도 때문에 다음 동기화 때 이어서 골라요.',
-    }[it.photo_pick] || '대표 사진을 다시 고를 차례예요.';
-    const note = it.photo_note && it.photo_pick !== 'manual' ? `<br><span style="font-size:12px;">${esc(it.photo_note)}</span>` : '';
+    if (photos.length < 2) return '';
     return `<div class="card">
-      <div class="row"><b class="grow">대표 사진</b><span class="muted">${photos.length}장</span></div>
-      <p class="muted" style="margin:0;">${how} 다른 사진을 누르면 대표 사진이 바뀌어요.${note}</p>
-      ${it.photo_source ? `<div style="font-size:11px; color: var(--mute);">사진 읽은 방법: ${esc(it.photo_source)}</div>` : ''}
+      <b>대표 사진</b>
       <div class="photos">
         ${photos.map((u, i) => `<button class="${u === it.image_url ? 'on' : ''}" onclick="App.pickPhoto(${it.id}, ${i})" aria-label="${i + 1}번 사진을 대표로">
           <img src="${esc(u)}" alt="" referrerpolicy="no-referrer" loading="lazy">${u === it.image_url ? '<span class="tag">대표</span>' : ''}</button>`).join('')}
       </div>
+      <p class="muted" style="margin:0;">다른 사진을 누르면 대표 사진이 바뀌어요.</p>
     </div>`;
   }
   function expiryCard(it) {
@@ -457,6 +445,7 @@
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">${statusBadge(it)}${expiryBadge(it, true)}</div>
       </div>
 
+      ${it.daangn_url ? `<a class="btn sm line" href="${esc(it.daangn_url)}" target="_blank" rel="noopener">당근에서 판매글 보기 ${ICON.out}</a>` : ''}
       ${photosCard(it)}
       ${expiryCard(it)}
 
@@ -476,7 +465,7 @@
             <button aria-label="수량 1개 늘리기" onclick="App.setQty(${it.id}, ${it.quantity + 1})">+</button>
           </div>
         </div>
-        <p class="muted" style="margin:0;">팔았을 때는 아래 "1개 판매 완료"를 눌러 주세요. 수량 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
+        <p class="muted" style="margin:0;">팔았을 때는 아래 "판매완료"를 눌러 주세요. 수량이 1개씩 줄어요. 수량 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
       </div>
 
       <div class="card">
@@ -489,15 +478,7 @@
         </form>
       </div>
 
-      <form class="card" onsubmit="event.preventDefault(); App.saveInfo(${it.id}, this)">
-        <label class="field">메모<textarea class="input" name="memo">${esc(it.memo || '')}</textarea></label>
-        <button class="btn sm line" type="submit">메모 저장</button>
-      </form>
-
-      ${it.daangn_url ? `<a class="btn sm line" href="${esc(it.daangn_url)}" target="_blank" rel="noopener">당근에서 판매글 보기 ${ICON.out}</a>
-        <p class="muted" style="margin:0;">당근에서 판매완료하면 다음 동기화 때 재고에서 자동으로 빠져요.</p>` : ''}
-
-      <button class="btn" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>1개 판매 완료</button>
+      <button class="btn" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>판매완료</button>
     </div>`;
   }
 
@@ -539,7 +520,7 @@
   // ------------------------------------------------------------------
   function viewMove() {
     const q = S.moveQ.trim().toLowerCase();
-    const list = S.items.filter(it => it.owner_user && it.quantity > 0 && (it.status === '판매중' || it.status === '예약중')
+    const list = S.items.filter(it => it.owner_user && it.quantity > 0 && it.status === '판매중'
       && (!q || `${it.title} ${it.location || ''}`.toLowerCase().includes(q))).slice(0, 60);
     const rows = list.map(it => {
       const n = Math.min(S.moveQty[it.id] || 1, it.quantity);
@@ -793,13 +774,6 @@
         if (q === 0 && it && it.status !== '판매완료') patch.status = '판매완료';
         if (q > 0 && it && it.status === '판매완료') patch.status = '판매중';
         await patchItem(id, patch);
-      });
-    },
-    saveInfo(id, form) {
-      const patch = { memo: form.memo.value.trim() || null };
-      withBusy(async () => {
-        await patchItem(id, patch);
-        toast('저장했어요');
       });
     },
     pickPhoto(id, idx) {
