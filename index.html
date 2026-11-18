@@ -358,15 +358,20 @@
   function photosCard(it) {
     const photos = it.photos || [];
     if (!it.details_fetched_at) return '<p class="muted" style="margin:0;">판매글의 사진 전체와 소비기한은 다음 동기화 때 불러와요.</p>';
-    if (photos.length < 2) return '';
-    const note = it.photo_pick === 'ai' ? 'AI가 고른 실물 앞면 사진이에요.'
-      : it.photo_pick === 'manual' ? '직접 고른 사진이에요.'
-      : it.photo_pick === 'ai_pending' ? 'AI가 실물 앞면 사진을 고를 차례예요. 무료 사용량 때문에 동기화 때마다 조금씩 처리돼요.'
-      : it.photo_pick === 'ai_failed' ? 'AI가 고르지 못해서 첫 번째 사진이에요.'
-      : '지금은 첫 번째 사진이에요.';
+    if (photos.length < 2) {
+      return `<p class="muted" style="margin:0;">${esc(it.photo_note || '판매글에서 사진을 1장만 찾았어요')}</p>`;
+    }
+    const how = {
+      ai: 'AI가 고른 실물 앞면 사진이에요.',
+      auto: '화면 캡처를 뺀 실물 사진 중 첫 번째예요.',
+      manual: '직접 고른 사진이에요.',
+      pending: '대표 사진을 고를 차례예요. 다음 동기화 때 골라요.',
+      ai_pending: 'AI가 고를 차례예요. 무료 한도 때문에 다음 동기화 때 이어서 골라요.',
+    }[it.photo_pick] || '대표 사진을 다시 고를 차례예요.';
+    const note = it.photo_note && it.photo_pick !== 'manual' ? `<br><span style="font-size:12px;">${esc(it.photo_note)}</span>` : '';
     return `<div class="card">
       <div class="row"><b class="grow">대표 사진</b><span class="muted">${photos.length}장</span></div>
-      <p class="muted" style="margin:0;">${note} 다른 사진을 누르면 대표 사진이 바뀌어요.</p>
+      <p class="muted" style="margin:0;">${how} 다른 사진을 누르면 대표 사진이 바뀌어요.${note}</p>
       <div class="photos">
         ${photos.map((u, i) => `<button class="${u === it.image_url ? 'on' : ''}" onclick="App.pickPhoto(${it.id}, ${i})" aria-label="${i + 1}번 사진을 대표로">
           <img src="${esc(u)}" alt="" referrerpolicy="no-referrer" loading="lazy">${u === it.image_url ? '<span class="tag">대표</span>' : ''}</button>`).join('')}
