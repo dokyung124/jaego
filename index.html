@@ -139,11 +139,11 @@
   const S = {
     session: null, me: null, members: [], items: [],
     view: 'list', itemId: null,
-    filter: { owner: 'all', status: 'active', q: '', loc: '' },
+    filter: { owner: 'all', status: 'active', q: '', loc: '', locOwner: '' },
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
     moveQ: '', moveQty: {}, transfers: [],
-    locate: { place: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' },
+    locate: { owner: '', place: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' },
     busy: false,
   };
 
@@ -299,9 +299,16 @@
   // 화면: 재고 목록
   // ------------------------------------------------------------------
   // 보관 위치 목록 (판매 중인 물건 기준, 숫자는 자연스러운 순서로)
-  function locations() {
+  // 보관 위치는 A님 / B님 / 공금이 각자 따로 가짐 (ownerKey: 사람 id 또는 'shared')
+  function ownerKey(it) { return it.owner_user || 'shared'; }
+  function ownerKeyName(k) { return k === 'shared' ? '공금' : ownerName(k); }
+  function locations(ok) {
     const set = new Set();
-    for (const it of S.items) if (it.location && (it.status === '판매중' || it.status === '예약중')) set.add(it.location);
+    for (const it of S.items) {
+      if (!it.location || !(it.status === '판매중' || it.status === '예약중')) continue;
+      if (ok && ownerKey(it) !== ok) continue;
+      set.add(it.location);
+    }
     return [...set].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
   }
   function filteredItems() {
@@ -313,6 +320,7 @@
       if (f.status === '예약중' && it.status !== '예약중') return false;
       if (f.owner === 'shared' && it.owner_user) return false;
       if (f.owner !== 'all' && f.owner !== 'shared' && it.owner_user !== f.owner) return false;
+      if (f.loc && f.locOwner && ownerKey(it) !== f.locOwner) return false;
       if (f.loc === '__none' && it.location) return false;
       if (f.loc && f.loc !== '__none' && it.location !== f.loc) return false;
       if (q && !it.title.toLowerCase().includes(q)) return false;
@@ -347,9 +355,24 @@
     const owners = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['shared', '공금'], ['all', '전체']];
     const soonCount = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
     const statuses = [['active', '전체'], ['예약중', '예약중'], ['soon', `기한 임박 ${soonCount}`]];
-    const locs = locations();
-    const hasNoLoc = S.items.some(it => !it.location && (it.status === '판매중' || it.status === '예약중'));
-    const locBtn = (v, label) => `<button class="chip ${f.loc === v ? 'on' : ''}" data-loc="${esc(v)}" onclick="App.locFilter(this.dataset.loc)">${esc(label)}</button>`;
+    const locBtn = (k, v, label) => `<button class="chip ${f.loc === v && (!v || f.locOwner === k) ? 'on' : ''}" data-loc="${esc(v)}" data-owner="${esc(k)}" onclick="App.locFilter(this.dataset.loc, this.dataset.owner)">${esc(label)}</button>`;
+    const active2 = it => it.status === '판매중' || it.status === '예약중';
+    let locHtml;
+    if (f.owner === 'all') {
+      // 전체 보기: 사람·공금별로 나눠서
+      const keys = [...membersMeFirst().map(m => m.user_id), 'shared'].filter(k => locations(k).length);
+      locHtml = keys.length
+        ? `<div class="locs">${locBtn('', '', '전체')}</div>` + keys.map(k => `<div class="muted" style="font-size:12px;">${esc(ownerKeyName(k))}</div>
+            <div class="locs">${locations(k).map(l => locBtn(k, l, l)).join('')}</div>`).join('')
+        : '';
+    } else {
+      const k = f.owner;
+      const locs = locations(k);
+      const hasNoLoc = S.items.some(it => active2(it) && ownerKey(it) === k && !it.location);
+      locHtml = locs.length
+        ? `<div class="locs">${locBtn(k, '', '전체')}${locs.map(l => locBtn(k, l, l)).join('')}${hasNoLoc ? locBtn(k, '__none', '위치 없음') : ''}</div>`
+        : '';
+    }
     return `<div class="page">
       <div class="top big"><div class="grow"><h1>재고</h1>
         <p class="sub">판매 중 ${active}개${soonCount ? ` · 기한 임박 ${soonCount}개` : ''} · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
@@ -367,9 +390,7 @@
       <div class="card" style="padding:12px 14px; gap:8px;">
         <div class="loc-head"><span class="grow">보관 위치로 찾기</span>
           <button class="pill blue" onclick="App.go('locate')">사진으로 한 번에 정하기</button></div>
-        ${locs.length
-          ? `<div class="locs">${locBtn('', '전체')}${locs.map(l => locBtn(l, l)).join('')}${hasNoLoc ? locBtn('__none', '위치 없음') : ''}</div>`
-          : '<p class="muted" style="margin:0;">물건 상세에서 보관 위치를 정하면 여기서 버튼으로 찾을 수 있어요.</p>'}
+        ${locHtml || '<p class="muted" style="margin:0;">물건 상세에서 보관 위치를 정하면 여기서 버튼으로 찾을 수 있어요.</p>'}
       </div>
       <div class="list" id="list">${listBody()}</div>
     </div>`;
@@ -455,7 +476,7 @@
 
       <div class="card">
         <div class="row"><b class="grow">보관 위치</b><span class="muted">${esc(it.location || '정하지 않음')}</span></div>
-        ${locations().length ? `<div class="locs">${locations().map(l => `<button class="chip ${it.location === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.setLoc(${it.id}, this.dataset.loc)">${esc(l)}</button>`).join('')}
+        ${locations(ownerKey(it)).length ? `<div class="locs">${locations(ownerKey(it)).map(l => `<button class="chip ${it.location === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.setLoc(${it.id}, this.dataset.loc)">${esc(l)}</button>`).join('')}
           ${it.location ? `<button class="chip" onclick="App.setLoc(${it.id}, '')">위치 빼기</button>` : ''}</div>` : ''}
         <form class="row" onsubmit="event.preventDefault(); App.addLoc(${it.id}, this)">
           <input class="input grow" name="newloc" placeholder="새 위치 입력 (예: 서랍 1층)" aria-label="새 보관 위치">
@@ -550,16 +571,19 @@
     const L = S.locate, q = L.q.trim().toLowerCase();
     if (!q) return '';
     const res = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && it.quantity > 0
-      && !L.list.includes(it.id) && it.title.toLowerCase().includes(q)).slice(0, 8);
+      && ownerKey(it) === locOwner() && !L.list.includes(it.id) && it.title.toLowerCase().includes(q)).slice(0, 8);
     if (!res.length) return '<p class="muted" style="margin:0;">찾는 물건이 없어요</p>';
     return res.map(it => `<button class="pick-row" onclick="App.locAdd(${it.id})">
       ${thumb(it)}<div class="grow"><div class="title">${esc(it.title)}</div>
       <div class="muted">${esc(ownerName(it.owner_user))}${it.location ? ' · 지금 ' + esc(it.location) : ''}</div></div>
       <span class="pill">추가</span></button>`).join('');
   }
+  function locOwner() { return S.locate.owner || (S.me && S.me.user_id) || 'shared'; }
   function viewLocate() {
     const L = S.locate;
-    const locs = locations();
+    const ok = locOwner();
+    const locs = locations(ok);
+    const ownerOpts = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['shared', '공금']];
     const placeBtn = l => `<button class="chip ${L.place === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.locPlace(this.dataset.loc)">${esc(l)}</button>`;
     const rows = L.list.map(id => {
       const it = S.items.find(x => x.id === id);
@@ -574,7 +598,15 @@
       <div class="top"><button class="icon-btn" aria-label="재고 목록으로" onclick="App.go('list')">${ICON.back}</button><h1>사진으로 보관 위치 정하기</h1></div>
 
       <div class="card">
-        <b>1. 보관 위치</b>
+        <b>1. 누구 물건 보관 위치인지</b>
+        <div class="seg" role="group" aria-label="누구 물건">
+          ${ownerOpts.map(([v, n]) => `<button class="${ok === v ? 'on' : ''}" onclick="App.locOwnerSet('${v}')">${esc(n)}</button>`).join('')}
+        </div>
+        <p class="muted" style="margin:0;">보관 위치는 ${esc(ownerKeyName(ok))} 물건끼리만 따로 관리돼요. 사진에서도 ${esc(ownerKeyName(ok))} 물건만 찾아요.</p>
+      </div>
+
+      <div class="card">
+        <b>2. 보관 위치</b>
         ${locs.length ? `<div class="locs">${locs.map(placeBtn).join('')}</div>` : ''}
         <form class="row" onsubmit="event.preventDefault(); App.locNewPlace(this)">
           <input class="input grow" name="place" placeholder="새 위치 입력 (예: 서랍 1층)" aria-label="새 보관 위치">
@@ -584,7 +616,7 @@
       </div>
 
       <div class="card">
-        <b>2. 같은 곳에 둘 물건을 모아 찍기</b>
+        <b>3. 같은 곳에 둘 물건을 모아 찍기</b>
         <p class="muted" style="margin:0;">물건 이름이 보이게 앞면이 나오도록 찍어 주세요. 앨범에서 골라도 돼요.</p>
         <label class="btn sm ${S.busy ? 'line' : ''}" style="cursor:pointer;">
           <input type="file" accept="image/*" style="display:none" onchange="App.locPhoto(this)" ${S.busy ? 'disabled' : ''}>
@@ -595,7 +627,7 @@
       </div>
 
       ${L.matched ? `<div class="card">
-        <b>3. 확인하고 저장</b>
+        <b>4. 확인하고 저장</b>
         <p class="muted" style="margin:0;">${L.list.length ? '사진에서 찾은 물건이에요. 아닌 건 눌러서 빼 주세요.' : '사진에서 재고 물건을 찾지 못했어요. 아래에서 직접 추가해 주세요.'}</p>
         <div class="list">${rows}</div>
         ${L.unknown.length ? `<p class="muted" style="margin:0;">재고에서 못 찾은 물건: ${L.unknown.map(esc).join(', ')}</p>` : ''}
@@ -720,9 +752,9 @@
       });
     },
     search(v) { S.filter.q = v; document.getElementById('list').innerHTML = listBody(); },
-    ownerFilter(v) { S.filter.owner = v; render(); },
+    ownerFilter(v) { S.filter.owner = v; S.filter.loc = ''; S.filter.locOwner = ''; render(); },
     statusFilter(v) { S.filter.status = v; render(); },
-    locFilter(v) { S.filter.loc = v || ''; render(); },
+    locFilter(v, k) { S.filter.loc = v || ''; S.filter.locOwner = v ? (k || '') : ''; render(); },
     setLoc(id, v) {
       withBusy(async () => {
         await patchItem(id, { location: v || null });
@@ -738,7 +770,16 @@
       });
     },
 
-    setOwner(id, uid) { withBusy(() => patchItem(id, { owner_user: uid || null })); },
+    setOwner(id, uid) {
+      const it = S.items.find(x => x.id === id);
+      if (!it || (it.owner_user || '') === (uid || '')) return;
+      // 보관 위치는 사람·공금별로 따로라서, 주인이 바뀌면 위치를 비움
+      const hadLoc = !!it.location;
+      withBusy(async () => {
+        await patchItem(id, { owner_user: uid || null, location: null });
+        if (hadLoc) toast('주인이 바뀌어서 보관 위치를 비웠어요');
+      });
+    },
     setQty(id, q) {
       if (q < 0) return;
       withBusy(async () => {
@@ -811,6 +852,11 @@
       });
     },
 
+    locOwnerSet(v) {
+      // 주인을 바꾸면 위치·찾은 결과를 처음부터
+      S.locate = { owner: v, place: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' };
+      render();
+    },
     locPlace(v) { S.locate.place = v; render(); },
     locNewPlace(form) {
       const v = form.place.value.trim();
@@ -825,7 +871,7 @@
       try { L.photo = await resizeImage(file); } catch (e) { L.error = errMsg(e); render(); return; }
       await withBusy(async () => {
         const { data, error } = await sb.functions.invoke('daangn-sync', {
-          body: { action: 'match_photo', image: L.photo.split(',')[1], mime: 'image/jpeg' },
+          body: { action: 'match_photo', image: L.photo.split(',')[1], mime: 'image/jpeg', owner: locOwner() },
         });
         if (error) {
           let msg = errMsg(error);
@@ -838,10 +884,10 @@
         for (const id of [...ids]) {
           const it = S.items.find(x => x.id === id);
           if (it && it.daangn_article_id) S.items.forEach(x => {
-            if (x.daangn_article_id === it.daangn_article_id && x.quantity > 0 && (x.status === '판매중' || x.status === '예약중')) ids.add(x.id);
+            if (x.daangn_article_id === it.daangn_article_id && ownerKey(x) === locOwner() && x.quantity > 0 && (x.status === '판매중' || x.status === '예약중')) ids.add(x.id);
           });
         }
-        L.list = [...ids].filter(id => S.items.some(x => x.id === id));
+        L.list = [...ids].filter(id => S.items.some(x => x.id === id && ownerKey(x) === locOwner()));
         L.sel = [...L.list];
         L.unknown = data.unknown || [];
         L.matched = true;
@@ -869,9 +915,11 @@
         const { error } = await sb.from('inv_items').update({ location: place }).in('id', ids);
         if (error) throw error;
         await loadItems();
-        S.locate = { place: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' };
+        const ok = locOwner();
+        S.locate = { owner: '', place: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' };
+        S.filter.owner = ok;
         S.filter.loc = place;
-        S.filter.owner = 'all';
+        S.filter.locOwner = ok;
         S.view = 'list';
         toast(`${ids.length}개를 '${place}'에 저장했어요`);
       });
