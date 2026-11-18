@@ -47,7 +47,10 @@
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; background: var(--line); border-radius: 12px; }
   .seg button { height: 42px; border: 0; border-radius: 9px; background: transparent; color: var(--ink2); font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .seg button.on { background: #fff; color: var(--ink); font-weight: 700; }
-  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .chips { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+  .locs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .locs .chip { padding: 0 14px; height: 38px; }
+  .loc-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mute); }
   .chip { height: 40px; padding: 0 4px; border: 1px solid var(--line2); border-radius: 20px; background: #fff; font-size: 14px; white-space: nowrap; cursor: pointer; }
   .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 500; }
   .btn { height: 52px; border: 0; border-radius: 14px; background: var(--blue); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
@@ -82,7 +85,7 @@
   .err { color: var(--red); font-size: 13px; }
   nav.bottom { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line);
     padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); }
-  nav.bottom .in { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  nav.bottom .in { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   nav.bottom button { height: 56px; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; color: var(--mute); cursor: pointer; }
   nav.bottom button.on { color: var(--blue-ink); font-weight: 700; }
   #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff;
@@ -121,11 +124,10 @@
   const S = {
     session: null, me: null, members: [], items: [],
     view: 'list', itemId: null,
-    filter: { owner: 'all', status: 'active', q: '' },
+    filter: { owner: 'all', status: 'active', q: '', loc: '' },
     authTab: 'login', authMsg: '', authErr: '',
     syncResult: {}, runs: [],
     moveQ: '', moveQty: {}, transfers: [],
-    salesMonth: monthStart(new Date()), sales: [],
     busy: false,
   };
 
@@ -275,6 +277,12 @@
   // ------------------------------------------------------------------
   // 화면: 재고 목록
   // ------------------------------------------------------------------
+  // 보관 위치 목록 (판매 중인 물건 기준, 숫자는 자연스러운 순서로)
+  function locations() {
+    const set = new Set();
+    for (const it of S.items) if (it.location && (it.status === '판매중' || it.status === '예약중')) set.add(it.location);
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+  }
   function filteredItems() {
     const f = S.filter, q = f.q.trim().toLowerCase();
     return S.items.filter(it => {
@@ -282,10 +290,11 @@
       if (f.status === 'active' && !active) return false;
       if (f.status === 'soon' && !(active && isSoon(it))) return false;
       if (f.status === '예약중' && it.status !== '예약중') return false;
-      if (f.status === '판매완료' && it.status !== '판매완료') return false;
       if (f.owner === 'shared' && it.owner_user) return false;
       if (f.owner !== 'all' && f.owner !== 'shared' && it.owner_user !== f.owner) return false;
-      if (q && !(`${it.title} ${it.location || ''} ${it.memo || ''} ${it.category || ''}`.toLowerCase().includes(q))) return false;
+      if (f.loc === '__none' && it.location) return false;
+      if (f.loc && f.loc !== '__none' && it.location !== f.loc) return false;
+      if (q && !it.title.toLowerCase().includes(q)) return false;
       return true;
     });
   }
@@ -316,20 +325,29 @@
     const f = S.filter;
     const owners = [['all', '전체'], ...S.members.map(m => [m.user_id, m.display_name]), ['shared', '공금']];
     const soonCount = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
-    const statuses = [['active', '판매·예약'], ['예약중', '예약중'], ['soon', `임박 ${soonCount}`], ['판매완료', '판매완료']];
+    const statuses = [['active', '전체'], ['예약중', '예약중'], ['soon', `기한 임박 ${soonCount}`]];
+    const locs = locations();
+    const hasNoLoc = S.items.some(it => !it.location && (it.status === '판매중' || it.status === '예약중'));
+    const locBtn = (v, label) => `<button class="chip ${f.loc === v ? 'on' : ''}" data-loc="${esc(v)}" onclick="App.locFilter(this.dataset.loc)">${esc(label)}</button>`;
     return `<div class="page">
       <div class="top big"><div class="grow"><h1>재고</h1>
         <p class="sub">판매 중 ${active}개${soonCount ? ` · 기한 임박 ${soonCount}개` : ''} · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
         <button class="icon-btn" aria-label="새로고침" onclick="App.refresh()">${ICON.sync}</button>
       </div>
       <label class="search">${ICON.search}
-        <input type="search" aria-label="물건 검색" placeholder="물건 이름, 보관 위치 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
+        <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
       </label>
       <div class="seg" role="group" aria-label="소유자별 보기">
         ${owners.map(([v, n]) => `<button class="${f.owner === v ? 'on' : ''}" onclick="App.ownerFilter('${v}')">${esc(n)}</button>`).join('')}
       </div>
       <div class="chips">
         ${statuses.map(([v, n]) => `<button class="chip ${f.status === v ? 'on' : ''}" onclick="App.statusFilter('${v}')">${n}</button>`).join('')}
+      </div>
+      <div class="card" style="padding:12px 14px; gap:8px;">
+        <div class="loc-head">보관 위치로 찾기</div>
+        ${locs.length
+          ? `<div class="locs">${locBtn('', '전체')}${locs.map(l => locBtn(l, l)).join('')}${hasNoLoc ? locBtn('__none', '위치 없음') : ''}</div>`
+          : '<p class="muted" style="margin:0;">물건 상세에서 보관 위치를 정하면 여기서 버튼으로 찾을 수 있어요.</p>'}
       </div>
       <div class="list" id="list">${listBody()}</div>
     </div>`;
@@ -406,13 +424,22 @@
             <button aria-label="수량 1개 늘리기" onclick="App.setQty(${it.id}, ${it.quantity + 1})">+</button>
           </div>
         </div>
-        <p class="muted" style="margin:0;">수량 버튼은 개수만 고쳐요. 팔았을 때는 아래 "1개 판매 완료"를 눌러야 판매 내역에 남아요.</p>
+        <p class="muted" style="margin:0;">팔았을 때는 아래 "1개 판매 완료"를 눌러 주세요. 수량 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
+      </div>
+
+      <div class="card">
+        <div class="row"><b class="grow">보관 위치</b><span class="muted">${esc(it.location || '정하지 않음')}</span></div>
+        ${locations().length ? `<div class="locs">${locations().map(l => `<button class="chip ${it.location === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.setLoc(${it.id}, this.dataset.loc)">${esc(l)}</button>`).join('')}
+          ${it.location ? `<button class="chip" onclick="App.setLoc(${it.id}, '')">위치 빼기</button>` : ''}</div>` : ''}
+        <form class="row" onsubmit="event.preventDefault(); App.addLoc(${it.id}, this)">
+          <input class="input grow" name="newloc" placeholder="새 위치 입력 (예: 서랍 1층)" aria-label="새 보관 위치">
+          <button class="btn sm" type="submit" style="width:auto; padding:0 16px;">추가</button>
+        </form>
       </div>
 
       <form class="card" onsubmit="event.preventDefault(); App.saveInfo(${it.id}, this)">
-        <label class="field">보관 위치<input class="input" name="location" value="${esc(it.location || '')}" placeholder="예: 선반 1-3"></label>
         <label class="field">메모<textarea class="input" name="memo">${esc(it.memo || '')}</textarea></label>
-        <button class="btn sm line" type="submit">저장</button>
+        <button class="btn sm line" type="submit">메모 저장</button>
       </form>
 
       ${it.daangn_url ? `<a class="btn sm line" href="${esc(it.daangn_url)}" target="_blank" rel="noopener">당근에서 판매글 보기 ${ICON.out}</a>
@@ -467,7 +494,7 @@
         <p class="muted" style="margin:0;">수량은 1개로 들어가요. 여러 개인 물건과 공금 물건만 고쳐 주세요.</p>`;
     }
     if (r.dry_run && r.sample && r.sample.length) {
-      html += '<div class="list">' + r.sample.map(s => `<div class="row">${thumb(s)}<div class="grow"><div class="title">${esc(s.title)}</div><div class="muted">${won(s.price)} · ${esc(s.status)}${s.region ? ' · ' + esc(s.region) : ''}</div></div></div>`).join('') + '</div>';
+      html += '<div class="list">' + r.sample.map(s => `<div class="row">${thumb(s)}<div class="grow"><div class="title">${esc(s.clean_title || s.title)}</div><div class="muted">${won(s.price)} · ${esc(s.status)}${s.region ? ' · ' + esc(s.region) : ''}</div></div></div>`).join('') + '</div>';
     }
     if (r.dry_run && r.detail_test && r.detail_test.length) {
       html += '<b style="font-size:14px;">판매글 상세 시험 (앞의 2개)</b>' + r.detail_test.map(d => d.error
@@ -519,36 +546,10 @@
   }
 
   // ------------------------------------------------------------------
-  // 화면: 판매 내역
-  // ------------------------------------------------------------------
-  function viewSales() {
-    const m = S.salesMonth;
-    const keys = [...S.members.map(x => x.user_id), null];
-    const sum = k => S.sales.filter(s => (s.owner_user || null) === k).reduce((a, s) => a + (s.unit_price || 0) * s.quantity, 0);
-    const cnt = k => S.sales.filter(s => (s.owner_user || null) === k).reduce((a, s) => a + s.quantity, 0);
-    return `<div class="page">
-      <div class="top"><h1>판매 내역</h1></div>
-      <div class="row">
-        <button class="btn sm line" style="width:auto; padding:0 14px;" onclick="App.salesMonth(-1)" aria-label="지난달">‹</button>
-        <b class="grow" style="text-align:center;">${m.getFullYear()}년 ${m.getMonth() + 1}월</b>
-        <button class="btn sm line" style="width:auto; padding:0 14px;" onclick="App.salesMonth(1)" aria-label="다음 달">›</button>
-      </div>
-      <div class="stats">${keys.map(k => `<div class="stat"><span>${esc(ownerName(k))}</span><b>${sum(k).toLocaleString('ko-KR')}원</b><span>${cnt(k)}개</span></div>`).join('')}</div>
-      <p class="muted" style="margin:0;">판매 금액은 당근에 올린 가격 기준이에요. 실제로 깎아 판 금액과 다를 수 있어요.</p>
-      <div class="list">
-        ${S.sales.map(s => `<div class="card" style="padding:12px 14px; gap:4px;">
-          <div class="row"><div class="title grow">${esc(s.title)}</div><b>${s.unit_price != null ? (s.unit_price * s.quantity).toLocaleString('ko-KR') + '원' : '-'}</b></div>
-          <div class="muted">${fmtDate(s.sold_at)} · ${esc(ownerName(s.owner_user))} · ${s.quantity}개 · ${s.source === 'daangn_sync' ? '당근 자동' : '직접'}</div>
-        </div>`).join('') || '<p class="empty">이 달 판매 기록이 없어요</p>'}
-      </div>
-    </div>`;
-  }
-
-  // ------------------------------------------------------------------
   // 그리기
   // ------------------------------------------------------------------
   function nav() {
-    const tabs = [['list', '재고', ICON.box], ['move', '공금 이동', ICON.move], ['connect', '당근 연결', ICON.sync], ['sales', '판매 내역', ICON.receipt]];
+    const tabs = [['list', '재고', ICON.box], ['move', '공금 이동', ICON.move], ['connect', '당근 연결', ICON.sync]];
     const cur = S.view === 'detail' ? 'list' : S.view;
     return `<nav class="bottom" aria-label="하단 메뉴"><div class="in">
       ${tabs.map(([v, n, i]) => `<button class="${cur === v ? 'on' : ''}" onclick="App.go('${v}')" ${cur === v ? 'aria-current="page"' : ''}>${i}${n}</button>`).join('')}
@@ -556,7 +557,7 @@
   }
   function render() {
     if (!S.session || !S.me) { $app.innerHTML = viewAuth(); return; }
-    const v = { list: viewList, detail: viewDetail, connect: viewConnect, move: viewMove, sales: viewSales }[S.view] || viewList;
+    const v = { list: viewList, detail: viewDetail, connect: viewConnect, move: viewMove }[S.view] || viewList;
     $app.innerHTML = v() + nav();
   }
 
@@ -610,13 +611,27 @@
       S.view = view; window.scrollTo(0, 0); render();
       if (view === 'connect') loadRuns();
       if (view === 'move') loadTransfers();
-      if (view === 'sales') loadSales();
     },
     open(id) { S.itemId = id; S.view = 'detail'; window.scrollTo(0, 0); render(); },
     async refresh() { await withBusy(loadAll); toast('새로 불러왔어요'); },
     search(v) { S.filter.q = v; document.getElementById('list').innerHTML = listBody(); },
     ownerFilter(v) { S.filter.owner = v; render(); },
     statusFilter(v) { S.filter.status = v; render(); },
+    locFilter(v) { S.filter.loc = v || ''; render(); },
+    setLoc(id, v) {
+      withBusy(async () => {
+        await patchItem(id, { location: v || null });
+        toast(v ? `보관 위치: ${v}` : '보관 위치를 뺐어요');
+      });
+    },
+    addLoc(id, form) {
+      const v = form.newloc.value.trim();
+      if (!v) return;
+      withBusy(async () => {
+        await patchItem(id, { location: v });
+        toast(`보관 위치: ${v}`);
+      });
+    },
 
     setOwner(id, uid) { withBusy(() => patchItem(id, { owner_user: uid || null })); },
     setQty(id, q) {
@@ -630,7 +645,7 @@
       });
     },
     saveInfo(id, form) {
-      const patch = { location: form.location.value.trim() || null, memo: form.memo.value.trim() || null };
+      const patch = { memo: form.memo.value.trim() || null };
       withBusy(async () => {
         await patchItem(id, patch);
         toast('저장했어요');
@@ -709,10 +724,6 @@
       });
     },
 
-    salesMonth(d) {
-      S.salesMonth = new Date(S.salesMonth.getFullYear(), S.salesMonth.getMonth() + d, 1);
-      render(); loadSales();
-    },
   };
 
   async function loadRuns() {
@@ -725,12 +736,6 @@
     const { data } = await sb.from('inv_transfers').select('*').gte('moved_at', start.toISOString()).order('moved_at', { ascending: false });
     S.transfers = data || [];
     if (S.view === 'move') render();
-  }
-  async function loadSales() {
-    const start = S.salesMonth, end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    const { data } = await sb.from('inv_sales').select('*').gte('sold_at', start.toISOString()).lt('sold_at', end.toISOString()).order('sold_at', { ascending: false });
-    S.sales = data || [];
-    if (S.view === 'sales') render();
   }
 
   // ------------------------------------------------------------------
