@@ -387,6 +387,7 @@
     return `<div class="card">
       <div class="row"><b class="grow">대표 사진</b><span class="muted">${photos.length}장</span></div>
       <p class="muted" style="margin:0;">${how} 다른 사진을 누르면 대표 사진이 바뀌어요.${note}</p>
+      ${it.photo_source ? `<div style="font-size:11px; color: var(--mute);">사진 읽은 방법: ${esc(it.photo_source)}</div>` : ''}
       <div class="photos">
         ${photos.map((u, i) => `<button class="${u === it.image_url ? 'on' : ''}" onclick="App.pickPhoto(${it.id}, ${i})" aria-label="${i + 1}번 사진을 대표로">
           <img src="${esc(u)}" alt="" referrerpolicy="no-referrer" loading="lazy">${u === it.image_url ? '<span class="tag">대표</span>' : ''}</button>`).join('')}
