@@ -47,6 +47,8 @@
   input.input[type=date]::-webkit-date-and-time-value { text-align: left; }
   .pill { height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--line2); background: #fff; color: var(--ink);
     font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .sq-btn { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--blue); background: #fff; color: var(--blue-ink);
+    font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
   .pill.blue { background: var(--blue); border-color: var(--blue); color: #fff; }
   .pill.text { border-color: transparent; background: transparent; color: var(--blue-ink); padding: 0 6px; }
   .search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; background: #fff; border: 1px solid var(--line2); border-radius: 12px; }
@@ -392,7 +394,7 @@
       </label>
       <div class="card" style="padding:12px 14px; gap:8px;">
         <div class="loc-head"><span class="grow">보관 위치로 찾기</span>
-          <button class="pill blue" onclick="App.go('locate')">사진으로 한 번에 정하기</button></div>
+          <button class="sq-btn" onclick="App.go('locate')">사진으로 등록</button></div>
         ${locHtml || '<p class="muted" style="margin:0;">물건 상세에서 보관 위치를 정하면 여기서 버튼으로 찾을 수 있어요.</p>'}
       </div>
       <div class="list" id="list">${listBody()}</div>
