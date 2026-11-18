@@ -104,7 +104,7 @@
   .spin svg { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff;
-    padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 40px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+    padding: 12px 16px; border-radius: 12px; font-size: 14px; width: max-content; max-width: calc(100% - 40px); text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
   #toast.show { opacity: 1; }
   .list { display: flex; flex-direction: column; gap: 10px; }
   pre.debug { background: var(--bg); padding: 10px; border-radius: 10px; font-size: 11px; overflow-x: hidden; white-space: pre-wrap; word-break: break-all; margin: 0; }
@@ -355,15 +355,15 @@
         <p class="sub">판매 중 ${active}개${soonCount ? ` · 기한 임박 ${soonCount}개` : ''} · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
         <button class="icon-btn ${S.busy ? 'spin' : ''}" aria-label="두 사람 당근 정보 새로 가져오기" onclick="App.refresh()" ${S.busy ? 'disabled' : ''}>${ICON.sync}</button>
       </div>
-      <label class="search">${ICON.search}
-        <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
-      </label>
       <div class="seg" role="group" aria-label="소유자별 보기">
         ${owners.map(([v, n]) => `<button class="${f.owner === v ? 'on' : ''}" onclick="App.ownerFilter('${v}')">${esc(n)}</button>`).join('')}
       </div>
       <div class="chips">
         ${statuses.map(([v, n]) => `<button class="chip ${f.status === v ? 'on' : ''}" onclick="App.statusFilter('${v}')">${n}</button>`).join('')}
       </div>
+      <label class="search">${ICON.search}
+        <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
+      </label>
       <div class="card" style="padding:12px 14px; gap:8px;">
         <div class="loc-head"><span class="grow">보관 위치로 찾기</span>
           <button class="pill blue" onclick="App.go('locate')">사진으로 한 번에 정하기</button></div>
