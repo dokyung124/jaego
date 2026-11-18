@@ -126,7 +126,7 @@
     view: 'list', itemId: null,
     filter: { owner: 'all', status: 'active', q: '', loc: '' },
     authTab: 'login', authMsg: '', authErr: '',
-    syncResult: {}, runs: [],
+    runs: [],
     moveQ: '', moveQty: {}, transfers: [],
     busy: false,
   };
@@ -192,7 +192,6 @@
   function statusBadge(it) {
     if (it.status === '판매완료') return '<span class="badge b-gray">판매완료</span>';
     if (it.status === '예약중') return '<span class="badge b-orange">예약중</span>';
-    if (it.quantity === 1) return '<span class="badge b-dark">마지막 1개</span>';
     return '<span class="badge b-blue">판매중</span>';
   }
   function thumb(it, cls = 'thumb') {
@@ -453,61 +452,33 @@
   // 화면: 당근 연결
   // ------------------------------------------------------------------
   function viewConnect() {
-    const cards = S.members.map(m => {
-      const r = S.syncResult[m.user_id];
-      const count = S.items.filter(it => it.posted_by === m.user_id && it.daangn_article_id).length;
-      return `<div class="card">
+    const cards = S.members.map(m => `<div class="card">
         <div class="row"><b class="grow">${esc(m.display_name)}님 프로필</b>
           ${m.daangn_profile_url ? (m.last_sync_ok === false ? '<span class="badge b-orange">확인 필요</span>' : '<span class="badge b-blue">연결됨</span>') : '<span class="badge b-gray">연결 전</span>'}</div>
-        ${m.daangn_profile_url ? `<div class="muted">재고 ${count}개 · ${ago(m.last_synced_at)} 확인${m.last_sync_message ? '<br>' + esc(m.last_sync_message) : ''}</div>` : ''}
         <label class="field">당근 프로필 링크
           <input class="input" id="link-${m.user_id}" placeholder="https://www.daangn.com/u/..." value="${esc(m.daangn_profile_url || '')}"></label>
-        <div class="row">
-          <button class="btn sm line grow" onclick="App.sync('${m.user_id}', true)" ${S.busy ? 'disabled' : ''}>시험해 보기</button>
-          <button class="btn sm grow" onclick="App.sync('${m.user_id}', false)" ${S.busy ? 'disabled' : ''}>가져오기</button>
-        </div>
-        ${r ? syncResultHtml(r) : ''}
+        <button class="btn sm" onclick="App.sync('${m.user_id}')" ${S.busy ? 'disabled' : ''}>가져오기</button>
+      </div>`).join('');
+
+    const runRow = r => {
+      const d = new Date(r.started_at);
+      return `<div style="display:flex; flex-direction:column; gap:2px; padding:8px 0; border-top:1px solid var(--line);">
+        <div class="muted">${fmtDate(r.started_at)} ${d.toTimeString().slice(0, 5)} · ${esc(ownerName(r.member))}</div>
+        <div style="font-size:14px; ${r.ok === false ? 'color: var(--red);' : ''}">${esc(r.message || '')}</div>
       </div>`;
-    }).join('');
+    };
 
     return `<div class="page">
       <div class="top"><h1>당근 연결</h1></div>
-      <p class="muted" style="margin:0; line-height:1.6;">당근 앱 › 나의 당근 › 내 프로필 › 공유 › 링크 복사 후 붙여넣으세요.
-        "시험해 보기"는 재고를 바꾸지 않고 판매글을 몇 개 찾는지만 보여줘요.</p>
+      <p class="muted" style="margin:0; line-height:1.6;">당근 앱 › 나의 당근 › 내 프로필 › 공유 › 링크 복사 후 붙여넣고 "가져오기"를 누르세요.</p>
       ${S.members.length < 2 ? '<div class="card"><span class="muted">아직 한 분만 가입했어요. 다른 한 분도 가입하면 여기에 함께 보여요.</span></div>' : ''}
       ${cards}
-      <button class="btn ghost" onclick="App.sync(null, false)" ${S.busy ? 'disabled' : ''}>두 분 모두 지금 다시 확인</button>
-      <p class="muted" style="margin:0; text-align:center;">예약 작업을 설정하면 하루 4번 자동으로 확인해요.</p>
-      ${S.runs.length ? `<div class="card"><b>최근 동기화 기록</b>${S.runs.map(r => `<div class="muted">${fmtDate(r.started_at)} ${new Date(r.started_at).toTimeString().slice(0,5)} · ${esc(ownerName(r.member))} · ${r.ok ? '' : '⚠ '}${esc(r.message || '')}</div>`).join('')}</div>` : ''}
+      <div class="card" style="gap:0;"><b style="padding-bottom:8px;">최근 동기화 기록</b>
+        ${S.runs.length ? S.runs.map(runRow).join('') : '<div class="muted" style="padding-top:8px; border-top:1px solid var(--line);">아직 기록이 없어요</div>'}
+      </div>
       <div class="card"><div class="muted">${esc(S.me.display_name)}님으로 로그인 중 · ${esc(S.me.email)}</div>
         <button class="btn sm line" onclick="App.logout()">로그아웃</button></div>
     </div>`;
-  }
-  function syncResultHtml(r) {
-    if (r.error) return `<p class="err" style="margin:0;">${esc(r.error)}</p>`;
-    let html = `<p style="margin:0; font-size:14px; ${r.ok ? '' : 'color: var(--red);'}">${esc(r.message || '')}</p>`;
-    if (!r.dry_run && r.ok) {
-      html += `<div class="stats">
-        <div class="stat"><b>${r.added ?? 0}</b><span>새로 추가</span></div>
-        <div class="stat"><b>${r.merged ?? 0}</b><span>두 동네 글 합침</span></div>
-        <div class="stat"><b>${r.sold ?? 0}</b><span>판매완료 처리</span></div></div>
-        <p class="muted" style="margin:0;">수량은 1개로 들어가요. 여러 개인 물건과 공금 물건만 고쳐 주세요.</p>`;
-    }
-    if (r.dry_run && r.sample && r.sample.length) {
-      html += '<div class="list">' + r.sample.map(s => `<div class="row">${thumb(s)}<div class="grow"><div class="title">${esc(s.clean_title || s.title)}</div><div class="muted">${won(s.price)} · ${esc(s.status)}${s.region ? ' · ' + esc(s.region) : ''}</div></div></div>`).join('') + '</div>';
-    }
-    if (r.dry_run && r.detail_test && r.detail_test.length) {
-      html += '<b style="font-size:14px;">판매글 상세 시험 (앞의 2개)</b>' + r.detail_test.map(d => d.error
-        ? `<p class="err" style="margin:0;">${esc(d.title)}: ${esc(d.error)}</p>`
-        : `<div style="display:flex; flex-direction:column; gap:6px;">
-            <div class="title">${esc(d.title)}</div>
-            <div class="muted">사진 ${d.photo_count}장 · 대표 ${d.front_index + 1}번 (${d.photo_pick === 'ai' ? 'AI 선택' : '첫 사진'}) · 소비기한 ${d.expiry_date ? fmtYMD(d.expiry_date) : '못 찾음'}</div>
-            ${d.photos && d.photos.length ? `<div class="photos">${d.photos.map((u, i) => `<button type="button" class="${i === d.front_index ? 'on' : ''}" tabindex="-1"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer">${i === d.front_index ? '<span class="tag">대표</span>' : ''}</button>`).join('')}</div>` : ''}
-          </div>`).join('');
-      html += `<details><summary class="muted">상세 확인용 정보</summary><pre class="debug">${esc(JSON.stringify(r.detail_test.map(d => ({ title: d.title, expiry_text: d.expiry_text, debug: d.debug, error: d.error })), null, 1))}</pre></details>`;
-    }
-    if (r.debug) html += `<details><summary class="muted">원인 확인용 정보</summary><pre class="debug">${esc(JSON.stringify(r.debug, null, 1))}</pre></details>`;
-    return html;
   }
 
   // ------------------------------------------------------------------
@@ -683,32 +654,26 @@
       });
     },
 
-    sync(memberId, dry) {
+    sync(memberId) {
       // 화면을 다시 그리기 전에 입력칸 값을 먼저 읽어 둠
-      const body = { dry_run: dry };
-      if (memberId) {
-        body.member_id = memberId;
-        const input = document.getElementById('link-' + memberId);
-        const m = S.members.find(x => x.user_id === memberId);
-        const link = input ? input.value.trim() : '';
-        if (!link && !m.daangn_profile_url) { S.syncResult[memberId] = { error: '당근 프로필 링크를 붙여넣어 주세요' }; render(); return; }
-        if (link && link !== m.daangn_profile_url) body.profile_url = link;
-      }
+      const body = { member_id: memberId };
+      const input = document.getElementById('link-' + memberId);
+      const m = S.members.find(x => x.user_id === memberId);
+      const link = input ? input.value.trim() : '';
+      if (!link && !m.daangn_profile_url) { toast('당근 프로필 링크를 붙여넣어 주세요'); return; }
+      if (link && link !== m.daangn_profile_url) body.profile_url = link;
       withBusy(async () => {
         const { data, error } = await sb.functions.invoke('daangn-sync', { body });
         if (error) {
           let msg = errMsg(error);
           try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) {}
-          if (memberId) S.syncResult[memberId] = { error: msg }; else toast(msg);
+          toast(msg);
           return;
-        }
-        for (const r of data.results || []) {
-          const m = S.members.find(x => x.display_name === r.member);
-          if (m) S.syncResult[m.user_id] = r;
         }
         await loadAll();
         await loadRuns();
-        if (!memberId) toast('다시 확인했어요');
+        const r = (data.results || [])[0];
+        toast(r && r.ok === false ? '가져오지 못했어요. 아래 기록을 확인해 주세요' : '가져왔어요');
       });
     },
 
@@ -727,7 +692,7 @@
   };
 
   async function loadRuns() {
-    const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(6);
+    const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(10);
     S.runs = data || [];
     if (S.view === 'connect') render();
   }
