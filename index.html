@@ -349,11 +349,14 @@
       </button>`).join('');
   }
   function viewList() {
-    const active = S.items.filter(it => (it.status === '판매중' || it.status === '예약중')).length;
+    // 위쪽 숫자는 고른 사람(또는 공금) 물건만 셈. 전체를 고르면 모두
+    const f0 = S.filter;
+    const mine = it => f0.owner === 'all' || ownerKey(it) === f0.owner;
+    const active = S.items.filter(it => mine(it) && (it.status === '판매중' || it.status === '예약중')).length;
     const last = S.members.map(m => m.last_synced_at).filter(Boolean).sort().pop();
     const f = S.filter;
     const owners = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['shared', '공금'], ['all', '전체']];
-    const soonCount = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
+    const soonCount = S.items.filter(it => mine(it) && (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
     const statuses = [['active', '전체'], ['예약중', '예약중'], ['soon', `기한 임박 ${soonCount}`]];
     const locBtn = (k, v, label) => `<button class="chip ${f.loc === v && (!v || f.locOwner === k) ? 'on' : ''}" data-loc="${esc(v)}" data-owner="${esc(k)}" onclick="App.locFilter(this.dataset.loc, this.dataset.owner)">${esc(label)}</button>`;
     const active2 = it => it.status === '판매중' || it.status === '예약중';
