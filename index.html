@@ -42,6 +42,13 @@
   .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--mute); }
   .input { height: 46px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 10px; background: #fff; font-size: 16px; color: var(--ink); width: 100%; }
   textarea.input { height: 80px; padding: 10px 12px; resize: vertical; }
+  /* 아이폰 날짜 칸이 카드 밖으로 넘치지 않게 */
+  input.input[type=date] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; text-align: left; line-height: 44px; }
+  input.input[type=date]::-webkit-date-and-time-value { text-align: left; }
+  .pill { height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--line2); background: #fff; color: var(--ink);
+    font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .pill.blue { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .pill.text { border-color: transparent; background: transparent; color: var(--blue-ink); padding: 0 6px; }
   .search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; background: #fff; border: 1px solid var(--line2); border-radius: 12px; }
   .search input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 16px; min-width: 0; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; background: var(--line); border-radius: 12px; }
@@ -88,6 +95,8 @@
   nav.bottom .in { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   nav.bottom button { height: 56px; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; color: var(--mute); cursor: pointer; }
   nav.bottom button.on { color: var(--blue-ink); font-weight: 700; }
+  .spin svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff;
     padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 40px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
   #toast.show { opacity: 1; }
@@ -139,6 +148,11 @@
   }
   function won(n) { return n == null ? '가격 없음' : (n === 0 ? '나눔' : Number(n).toLocaleString('ko-KR') + '원'); }
   function monthStart(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+  // 로그인한 사람을 먼저, 그다음 다른 한 사람
+  function membersMeFirst() {
+    const meId = S.me && S.me.user_id;
+    return [...S.members].sort((a, b) => (a.user_id === meId ? -1 : 0) - (b.user_id === meId ? -1 : 0));
+  }
   function ownerName(uid) {
     if (!uid) return '공금';
     const m = S.members.find(x => x.user_id === uid);
@@ -241,6 +255,7 @@
       return render();
     }
     S.me = data;
+    S.filter.owner = data.user_id; // 홈은 내 물건부터
     try { await loadAll(); } catch (e) { toast(errMsg(e)); }
     render();
   }
@@ -322,7 +337,7 @@
     const active = S.items.filter(it => (it.status === '판매중' || it.status === '예약중')).length;
     const last = S.members.map(m => m.last_synced_at).filter(Boolean).sort().pop();
     const f = S.filter;
-    const owners = [['all', '전체'], ...S.members.map(m => [m.user_id, m.display_name]), ['shared', '공금']];
+    const owners = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['shared', '공금'], ['all', '전체']];
     const soonCount = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
     const statuses = [['active', '전체'], ['예약중', '예약중'], ['soon', `기한 임박 ${soonCount}`]];
     const locs = locations();
@@ -331,7 +346,7 @@
     return `<div class="page">
       <div class="top big"><div class="grow"><h1>재고</h1>
         <p class="sub">판매 중 ${active}개${soonCount ? ` · 기한 임박 ${soonCount}개` : ''} · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
-        <button class="icon-btn" aria-label="새로고침" onclick="App.refresh()">${ICON.sync}</button>
+        <button class="icon-btn ${S.busy ? 'spin' : ''}" aria-label="두 사람 당근 정보 새로 가져오기" onclick="App.refresh()" ${S.busy ? 'disabled' : ''}>${ICON.sync}</button>
       </div>
       <label class="search">${ICON.search}
         <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
@@ -384,22 +399,20 @@
       ? `<div class="row"><div class="grow"><div class="muted">소비기한</div><div style="font-size:22px; font-weight:700;">${fmtYMD(it.expiry_date)}</div></div>
            ${e.expired ? '<span class="badge b-red">기한 지남</span>' : `<span class="badge ${e.soon ? 'b-orange' : 'b-gray'}">D-${e.days}</span>`}</div>`
       : `<div><div class="muted">소비기한</div><div style="font-size:15px; margin-top:4px;">${it.details_fetched_at ? '판매글에서 찾지 못했어요' : '아직 불러오기 전이에요'}</div></div>`;
-    const src = it.expiry_manual ? '직접 입력한 기한이에요.'
-      : it.expiry_text ? `판매글 문구: "${esc(it.expiry_text)}"` : '';
     return `<form class="card" onsubmit="event.preventDefault(); App.saveExpiry(${it.id}, this)">
       ${head}
-      ${src ? `<p class="muted" style="margin:0;">${src}</p>` : ''}
-      <label class="field">직접 고치기<input class="input" type="date" name="expiry" value="${esc(it.expiry_date || '')}"></label>
+      <div class="muted">직접 고치기${it.expiry_manual ? ' · 직접 입력한 기한이에요' : ''}</div>
       <div class="row">
-        <button class="btn sm line grow" type="submit">기한 저장</button>
-        ${it.expiry_manual ? `<button class="btn sm ghost grow" type="button" onclick="App.resetExpiry(${it.id})">판매글 기준으로 되돌리기</button>` : ''}
+        <input class="input grow" type="date" name="expiry" aria-label="소비기한 날짜" value="${esc(it.expiry_date || '')}">
+        <button class="pill blue" type="submit">기한 저장</button>
       </div>
+      ${it.expiry_manual ? `<div><button class="pill text" type="button" onclick="App.resetExpiry(${it.id})">판매글 기준으로 되돌리기</button></div>` : ''}
     </form>`;
   }
   function viewDetail() {
     const it = S.items.find(x => x.id === S.itemId);
     if (!it) { S.view = 'list'; return viewList(); }
-    const owners = [...S.members.map(m => [m.user_id, m.display_name]), ['', '공금']];
+    const owners = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['', '공금']];
     return `<div class="page">
       <div class="top"><button class="icon-btn" aria-label="재고 목록으로" onclick="App.go('list')">${ICON.back}</button><h1></h1></div>
       ${it.image_url ? `<img class="hero" src="${esc(it.image_url)}" alt="" referrerpolicy="no-referrer">` : '<div class="hero">사진 없음</div>'}
@@ -589,7 +602,29 @@
       if (view === 'move') loadTransfers();
     },
     open(id) { S.itemId = id; S.view = 'detail'; window.scrollTo(0, 0); render(); },
-    async refresh() { await withBusy(loadAll); toast('새로 불러왔어요'); },
+    // 홈 새로고침: 두 사람 당근 프로필을 모두 가져와 동기화
+    async refresh() {
+      if (S.busy) return;
+      toast('당근에서 가져오는 중이에요…');
+      await withBusy(async () => {
+        const { data, error } = await sb.functions.invoke('daangn-sync', { body: {} });
+        if (error) {
+          let msg = errMsg(error);
+          try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch (_) {}
+          await loadAll();
+          toast(msg);
+          return;
+        }
+        await loadAll();
+        loadRuns();
+        const rs = (data && data.results) || [];
+        const failed = rs.filter(r => r.ok === false && !/링크가 아직/.test(r.message || ''));
+        const noLink = rs.filter(r => /링크가 아직/.test(r.message || ''));
+        if (failed.length) toast(`${failed.map(r => r.member).join(', ')}님 가져오기에 문제가 있어요. 당근 연결에서 기록을 확인해 주세요`);
+        else if (noLink.length === rs.length) toast('당근 연결에서 프로필 링크를 먼저 넣어 주세요');
+        else toast('당근 정보를 가져왔어요');
+      });
+    },
     search(v) { S.filter.q = v; document.getElementById('list').innerHTML = listBody(); },
     ownerFilter(v) { S.filter.owner = v; render(); },
     statusFilter(v) { S.filter.status = v; render(); },
@@ -697,7 +732,7 @@
   };
 
   async function loadRuns() {
-    const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(10);
+    const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(1);
     S.runs = data || [];
     if (S.view === 'connect') render();
   }
