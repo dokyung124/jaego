@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -23,7 +23,8 @@
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
-    font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; font-size: 15px; }
+    font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif; font-size: 15px;
+    overflow-x: hidden; touch-action: pan-y; -webkit-text-size-adjust: 100%; overscroll-behavior-x: none; }
   button, input, select, textarea { font: inherit; color: inherit; }
   a { color: inherit; text-decoration: none; }
   .wrap { max-width: 520px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column;
@@ -39,16 +40,15 @@
   .grow { flex: 1; min-width: 0; }
   .muted { color: var(--mute); font-size: 13px; }
   .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--mute); }
-  .input { height: 46px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 10px; background: #fff; font-size: 15px; color: var(--ink); width: 100%; }
+  .input { height: 46px; padding: 0 12px; border: 1px solid var(--line2); border-radius: 10px; background: #fff; font-size: 16px; color: var(--ink); width: 100%; }
   textarea.input { height: 80px; padding: 10px 12px; resize: vertical; }
   .search { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; background: #fff; border: 1px solid var(--line2); border-radius: 12px; }
-  .search input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 15px; min-width: 0; }
+  .search input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 16px; min-width: 0; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; background: var(--line); border-radius: 12px; }
   .seg button { height: 42px; border: 0; border-radius: 9px; background: transparent; color: var(--ink2); font-size: 14px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .seg button.on { background: #fff; color: var(--ink); font-weight: 700; }
-  .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chip { height: 40px; padding: 0 14px; border: 1px solid var(--line2); border-radius: 20px; background: #fff; font-size: 14px; white-space: nowrap; cursor: pointer; }
+  .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .chip { height: 40px; padding: 0 4px; border: 1px solid var(--line2); border-radius: 20px; background: #fff; font-size: 14px; white-space: nowrap; cursor: pointer; }
   .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 500; }
   .btn { height: 52px; border: 0; border-radius: 14px; background: var(--blue); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
   .btn.sm { height: 44px; font-size: 14px; border-radius: 10px; }
@@ -60,6 +60,12 @@
   .b-orange { background: var(--orange-bg); color: var(--orange-ink); }
   .b-gray { background: var(--gray-bg); color: var(--ink2); }
   .b-dark { background: var(--ink); color: #fff; }
+  .b-red { background: #FDECEA; color: var(--red); }
+  .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .photos button { padding: 0; border: 2px solid transparent; border-radius: 10px; background: var(--line); aspect-ratio: 1; overflow: hidden; cursor: pointer; position: relative; }
+  .photos button.on { border-color: var(--blue); }
+  .photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photos .tag { position: absolute; left: 4px; top: 4px; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 5px; }
   .item { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; width: 100%; text-align: left; }
   .thumb { width: 60px; height: 60px; border-radius: 10px; background: var(--line); flex-shrink: 0; object-fit: cover; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--mute); overflow: hidden; }
   .title { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -83,7 +89,7 @@
     padding: 12px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 40px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
   #toast.show { opacity: 1; }
   .list { display: flex; flex-direction: column; gap: 10px; }
-  pre.debug { background: var(--bg); padding: 10px; border-radius: 10px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  pre.debug { background: var(--bg); padding: 10px; border-radius: 10px; font-size: 11px; overflow-x: hidden; white-space: pre-wrap; word-break: break-all; margin: 0; }
 </style>
 </head>
 <body>
@@ -94,6 +100,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (() => {
+  // 확대 막기: 두 손가락 확대, 사파리 제스처 (두 번 탭 확대는 CSS touch-action 으로 막음)
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
+    document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
   const cfg = window.INV_CONFIG || {};
   const $app = document.getElementById('app');
 
@@ -157,6 +168,24 @@
     if (/Password should be/i.test(m)) return '비밀번호는 6자 이상이어야 해요';
     if (/duplicate key|inv_items_article_owner_uniq/i.test(m)) return '같은 판매글의 물건이 그 주인에게 이미 있어요';
     return m;
+  }
+  function today0() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+  function fmtYMD(s) { return s ? s.replace(/-/g, '.') : ''; }
+  // 소비기한 정보: 6개월 안이면 임박
+  function expiryInfo(it) {
+    if (!it.expiry_date) return null;
+    const d = new Date(it.expiry_date + 'T00:00:00'), t = today0();
+    const days = Math.round((d - t) / 86400000);
+    const limit = new Date(t); limit.setMonth(limit.getMonth() + 6);
+    return { days, expired: days < 0, soon: d <= limit };
+  }
+  function isSoon(it) { const e = expiryInfo(it); return !!(e && e.soon); }
+  function expiryBadge(it, always = false) {
+    const e = expiryInfo(it);
+    if (!e) return '';
+    if (e.expired) return '<span class="badge b-red">기한 지남</span>';
+    if (e.soon) return `<span class="badge b-orange">임박 D-${e.days}</span>`;
+    return always ? `<span class="badge b-gray">D-${e.days}</span>` : '';
   }
   function statusBadge(it) {
     if (it.status === '판매완료') return '<span class="badge b-gray">판매완료</span>';
@@ -249,9 +278,11 @@
   function filteredItems() {
     const f = S.filter, q = f.q.trim().toLowerCase();
     return S.items.filter(it => {
-      if (f.status === 'active' && !(it.status === '판매중' || it.status === '예약중')) return false;
-      if (f.status !== 'active' && f.status !== 'all' && it.status !== f.status) return false;
-      if (f.status === 'all' && it.status === '판매완료') return false;
+      const active = it.status === '판매중' || it.status === '예약중';
+      if (f.status === 'active' && !active) return false;
+      if (f.status === 'soon' && !(active && isSoon(it))) return false;
+      if (f.status === '예약중' && it.status !== '예약중') return false;
+      if (f.status === '판매완료' && it.status !== '판매완료') return false;
       if (f.owner === 'shared' && it.owner_user) return false;
       if (f.owner !== 'all' && f.owner !== 'shared' && it.owner_user !== f.owner) return false;
       if (q && !(`${it.title} ${it.location || ''} ${it.memo || ''} ${it.category || ''}`.toLowerCase().includes(q))) return false;
@@ -260,6 +291,7 @@
   }
   function listBody() {
     const list = filteredItems();
+    if (S.filter.status === 'soon') list.sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
     if (!list.length) {
       return S.items.length
         ? '<p class="empty">조건에 맞는 물건이 없어요</p>'
@@ -271,9 +303,10 @@
         <div class="grow" style="display:flex; flex-direction:column; gap:4px;">
           <div class="title">${esc(it.title)}</div>
           <div class="muted">${esc(ownerName(it.owner_user))}${it.location ? ' · ' + esc(it.location) : ''} · ${won(it.price)}</div>
+          ${it.expiry_date ? `<div class="muted">기한 ${fmtYMD(it.expiry_date)}</div>` : ''}
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
-          <div class="qty">${it.quantity}개</div>${statusBadge(it)}
+          <div class="qty">${it.quantity}개</div>${statusBadge(it)}${expiryBadge(it)}
         </div>
       </button>`).join('');
   }
@@ -282,10 +315,11 @@
     const last = S.members.map(m => m.last_synced_at).filter(Boolean).sort().pop();
     const f = S.filter;
     const owners = [['all', '전체'], ...S.members.map(m => [m.user_id, m.display_name]), ['shared', '공금']];
-    const statuses = [['active', '판매중+예약중'], ['판매중', '판매중'], ['예약중', '예약중'], ['판매완료', '판매완료']];
+    const soonCount = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && isSoon(it)).length;
+    const statuses = [['active', '판매·예약'], ['예약중', '예약중'], ['soon', `임박 ${soonCount}`], ['판매완료', '판매완료']];
     return `<div class="page">
       <div class="top big"><div class="grow"><h1>재고</h1>
-        <p class="sub">판매 중 ${active}개 · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
+        <p class="sub">판매 중 ${active}개${soonCount ? ` · 기한 임박 ${soonCount}개` : ''} · ${last ? ago(last) + ' 동기화' : '당근 연결 전'}</p></div>
         <button class="icon-btn" aria-label="새로고침" onclick="App.refresh()">${ICON.sync}</button>
       </div>
       <label class="search">${ICON.search}
@@ -304,6 +338,42 @@
   // ------------------------------------------------------------------
   // 화면: 물건 상세
   // ------------------------------------------------------------------
+  function photosCard(it) {
+    const photos = it.photos || [];
+    if (!it.details_fetched_at) return '<p class="muted" style="margin:0;">판매글의 사진 전체와 소비기한은 다음 동기화 때 불러와요.</p>';
+    if (photos.length < 2) return '';
+    const note = it.photo_pick === 'ai' ? 'AI가 고른 실물 앞면 사진이에요.'
+      : it.photo_pick === 'manual' ? '직접 고른 사진이에요.'
+      : it.photo_pick === 'ai_pending' ? 'AI가 실물 앞면 사진을 고를 차례예요. 무료 사용량 때문에 동기화 때마다 조금씩 처리돼요.'
+      : it.photo_pick === 'ai_failed' ? 'AI가 고르지 못해서 첫 번째 사진이에요.'
+      : '지금은 첫 번째 사진이에요.';
+    return `<div class="card">
+      <div class="row"><b class="grow">대표 사진</b><span class="muted">${photos.length}장</span></div>
+      <p class="muted" style="margin:0;">${note} 다른 사진을 누르면 대표 사진이 바뀌어요.</p>
+      <div class="photos">
+        ${photos.map((u, i) => `<button class="${u === it.image_url ? 'on' : ''}" onclick="App.pickPhoto(${it.id}, ${i})" aria-label="${i + 1}번 사진을 대표로">
+          <img src="${esc(u)}" alt="" referrerpolicy="no-referrer" loading="lazy">${u === it.image_url ? '<span class="tag">대표</span>' : ''}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+  function expiryCard(it) {
+    const e = expiryInfo(it);
+    const head = it.expiry_date
+      ? `<div class="row"><div class="grow"><div class="muted">소비기한</div><div style="font-size:22px; font-weight:700;">${fmtYMD(it.expiry_date)}</div></div>
+           ${e.expired ? '<span class="badge b-red">기한 지남</span>' : `<span class="badge ${e.soon ? 'b-orange' : 'b-gray'}">D-${e.days}</span>`}</div>`
+      : `<div><div class="muted">소비기한</div><div style="font-size:15px; margin-top:4px;">${it.details_fetched_at ? '판매글에서 찾지 못했어요' : '아직 불러오기 전이에요'}</div></div>`;
+    const src = it.expiry_manual ? '직접 입력한 기한이에요.'
+      : it.expiry_text ? `판매글 문구: "${esc(it.expiry_text)}"` : '';
+    return `<form class="card" onsubmit="event.preventDefault(); App.saveExpiry(${it.id}, this)">
+      ${head}
+      ${src ? `<p class="muted" style="margin:0;">${src}</p>` : ''}
+      <label class="field">직접 고치기<input class="input" type="date" name="expiry" value="${esc(it.expiry_date || '')}"></label>
+      <div class="row">
+        <button class="btn sm line grow" type="submit">기한 저장</button>
+        ${it.expiry_manual ? `<button class="btn sm ghost grow" type="button" onclick="App.resetExpiry(${it.id})">판매글 기준으로 되돌리기</button>` : ''}
+      </div>
+    </form>`;
+  }
   function viewDetail() {
     const it = S.items.find(x => x.id === S.itemId);
     if (!it) { S.view = 'list'; return viewList(); }
@@ -314,8 +384,11 @@
       <div class="row" style="align-items:flex-start;">
         <div class="grow"><h2 style="margin:0; font-size:22px;">${esc(it.title)}</h2>
           <p class="sub">${won(it.price)}${it.region ? ' · ' + esc(it.region) : ''}</p></div>
-        ${statusBadge(it)}
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">${statusBadge(it)}${expiryBadge(it, true)}</div>
       </div>
+
+      ${photosCard(it)}
+      ${expiryCard(it)}
 
       <div class="card">
         <div class="muted">누구 물건인지</div>
@@ -395,6 +468,16 @@
     }
     if (r.dry_run && r.sample && r.sample.length) {
       html += '<div class="list">' + r.sample.map(s => `<div class="row">${thumb(s)}<div class="grow"><div class="title">${esc(s.title)}</div><div class="muted">${won(s.price)} · ${esc(s.status)}${s.region ? ' · ' + esc(s.region) : ''}</div></div></div>`).join('') + '</div>';
+    }
+    if (r.dry_run && r.detail_test && r.detail_test.length) {
+      html += '<b style="font-size:14px;">판매글 상세 시험 (앞의 2개)</b>' + r.detail_test.map(d => d.error
+        ? `<p class="err" style="margin:0;">${esc(d.title)}: ${esc(d.error)}</p>`
+        : `<div style="display:flex; flex-direction:column; gap:6px;">
+            <div class="title">${esc(d.title)}</div>
+            <div class="muted">사진 ${d.photo_count}장 · 대표 ${d.front_index + 1}번 (${d.photo_pick === 'ai' ? 'AI 선택' : '첫 사진'}) · 소비기한 ${d.expiry_date ? fmtYMD(d.expiry_date) : '못 찾음'}</div>
+            ${d.photos && d.photos.length ? `<div class="photos">${d.photos.map((u, i) => `<button type="button" class="${i === d.front_index ? 'on' : ''}" tabindex="-1"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer">${i === d.front_index ? '<span class="tag">대표</span>' : ''}</button>`).join('')}</div>` : ''}
+          </div>`).join('');
+      html += `<details><summary class="muted">상세 확인용 정보</summary><pre class="debug">${esc(JSON.stringify(r.detail_test.map(d => ({ title: d.title, expiry_text: d.expiry_text, debug: d.debug, error: d.error })), null, 1))}</pre></details>`;
     }
     if (r.debug) html += `<details><summary class="muted">원인 확인용 정보</summary><pre class="debug">${esc(JSON.stringify(r.debug, null, 1))}</pre></details>`;
     return html;
@@ -551,6 +634,27 @@
       withBusy(async () => {
         await patchItem(id, patch);
         toast('저장했어요');
+      });
+    },
+    pickPhoto(id, idx) {
+      const it = S.items.find(x => x.id === id);
+      if (!it || !it.photos || !it.photos[idx]) return;
+      withBusy(async () => {
+        await patchItem(id, { image_url: it.photos[idx], image_locked: true, photo_pick: 'manual' });
+        toast('대표 사진을 바꿨어요');
+      });
+    },
+    saveExpiry(id, form) {
+      const v = form.expiry.value || null;
+      withBusy(async () => {
+        await patchItem(id, { expiry_date: v, expiry_manual: true });
+        toast(v ? '소비기한을 저장했어요' : '소비기한을 지웠어요');
+      });
+    },
+    resetExpiry(id) {
+      withBusy(async () => {
+        await patchItem(id, { expiry_manual: false, details_fetched_at: null });
+        toast('다음 동기화 때 판매글 기준으로 다시 불러와요');
       });
     },
     sell(id) {
