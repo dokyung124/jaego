@@ -47,6 +47,9 @@
   input.input[type=date]::-webkit-date-and-time-value { text-align: left; }
   .pill { height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--line2); background: #fff; color: var(--ink);
     font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .sell-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--blue); color: #fff;
+    font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .sell-btn:disabled { opacity: .5; cursor: default; }
   .sq-btn { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--blue); background: #fff; color: var(--blue-ink);
     font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
   .pill.blue { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -464,8 +467,9 @@
             <button aria-label="수량 1개 줄이기" onclick="App.setQty(${it.id}, ${it.quantity - 1})" ${it.quantity <= 0 ? 'disabled' : ''}>−</button>
             <button aria-label="수량 1개 늘리기" onclick="App.setQty(${it.id}, ${it.quantity + 1})">+</button>
           </div>
+          <button class="sell-btn" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>판매완료</button>
         </div>
-        <p class="muted" style="margin:0;">팔았을 때는 아래 "판매완료"를 눌러 주세요. 수량이 1개씩 줄어요. 수량 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
+        <p class="muted" style="margin:0;">팔았을 때는 "판매완료"를 눌러 주세요. 수량이 1개씩 줄어요. +/− 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
       </div>
 
       <div class="card">
@@ -477,8 +481,6 @@
           <button class="btn sm" type="submit" style="width:auto; padding:0 16px;">추가</button>
         </form>
       </div>
-
-      <button class="btn" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>판매완료</button>
     </div>`;
   }
 
