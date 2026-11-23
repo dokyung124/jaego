@@ -46,7 +46,8 @@
   input.input[type=date] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; text-align: left; line-height: 44px; }
   input.input[type=date]::-webkit-date-and-time-value { text-align: left; }
   .pill { height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid var(--line2); background: #fff; color: var(--ink);
-    font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+    font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; line-height: 1; }
   .sell-btn { height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--blue); color: #fff;
     font-size: 14px; font-weight: 700; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
   .sell-btn:disabled { opacity: .5; cursor: default; }
@@ -103,6 +104,11 @@
   .pick-row { display: flex; align-items: center; gap: 12px; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; width: 100%; text-align: left; cursor: pointer; }
   .pick-row.on { border-color: var(--blue); background: #F4F7FE; }
   .pick-row .thumb { width: 48px; height: 48px; }
+  .pick-main { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; background: none; border: 0; padding: 0;
+    text-align: left; font: inherit; color: inherit; cursor: pointer; }
+  .stepper.sm { height: 36px; }
+  .stepper.sm button { width: 32px; height: 34px; font-size: 18px; }
+  .stepper.sm span { min-width: 24px; font-size: 14px; }
   .check { width: 24px; height: 24px; border-radius: 12px; border: 2px solid var(--line2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 700; }
   .pick-row.on .check { background: var(--blue); border-color: var(--blue); }
   .preview { width: 100%; max-height: 260px; object-fit: contain; border-radius: 12px; background: var(--line); }
@@ -148,7 +154,7 @@
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
     moveQ: '', moveQty: {}, transfers: [],
-    locate: { owner: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' },
+    locate: { owner: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' },
     busy: false,
   };
 
@@ -538,7 +544,7 @@
   // 화면: 사진으로 보관 위치 한 번에 정하기
   // ------------------------------------------------------------------
   function emptyLocate(owner = '') {
-    return { owner, place: '', adding: false, mode: '', photo: '', list: [], sel: [], unknown: [], matched: false, error: '', q: '' };
+    return { owner, place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' };
   }
   function locateSearchHtml() {
     const L = S.locate, q = L.q.trim().toLowerCase();
@@ -567,10 +573,20 @@
       const it = S.items.find(x => x.id === id);
       if (!it) return '';
       const on = L.sel.includes(id);
-      return `<button class="pick-row ${on ? 'on' : ''}" onclick="App.locToggle(${id})" aria-pressed="${on}">
-        <span class="check">${on ? '✓' : ''}</span>${thumb(it)}
-        <div class="grow"><div class="title">${esc(it.title)}</div>
-        <div class="muted">${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div></div></button>`;
+      const q = L.qty[id] ?? it.quantity;
+      return `<div class="pick-row ${on ? 'on' : ''}">
+        <button class="pick-main" onclick="App.locToggle(${id})" aria-pressed="${on}" aria-label="${esc(it.title)} 선택">
+          <span class="check">${on ? '✓' : ''}</span>${thumb(it)}
+          <div class="grow" style="min-width:0;"><div class="title">${esc(it.title)}</div>
+          <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div>
+          ${q !== it.quantity ? `<div style="font-size:12px; color: var(--blue-ink);">원래 ${it.quantity}개</div>` : ''}</div>
+        </button>
+        ${on ? `<div class="stepper sm">
+          <button aria-label="수량 줄이기" onclick="App.locQty(${id}, ${q - 1})" ${q <= 1 ? 'disabled' : ''}>−</button>
+          <span>${q}</span>
+          <button aria-label="수량 늘리기" onclick="App.locQty(${id}, ${q + 1})">+</button>
+        </div>` : ''}
+      </div>`;
     }).join('');
     const intro = L.mode === 'photo'
       ? (L.list.length ? '사진에서 찾은 물건이에요. 아닌 건 눌러서 빼 주세요.' : '사진에서 재고 물건을 찾지 못했어요. 아래에서 이름으로 추가해 주세요.')
@@ -584,19 +600,6 @@
         <div class="seg" role="group" aria-label="누구 물건">
           ${ownerOpts.map(([v, n]) => `<button class="${ok === v ? 'on' : ''}" onclick="App.locOwnerSet('${v}')">${esc(n)}</button>`).join('')}
         </div>
-      </div>
-
-      <div class="card">
-        <b>보관 위치</b>
-        <div class="locs">
-          ${locs.map(placeBtn).join('')}
-          ${L.adding ? '' : '<button class="chip" aria-label="새 보관 위치 추가" onclick="App.locAddOpen()" style="font-size:18px; font-weight:700;">+</button>'}
-        </div>
-        ${L.adding ? `<form class="row" onsubmit="event.preventDefault(); App.locNewPlace(this)">
-          <input class="input grow" name="place" id="newplace" placeholder="새 위치 이름 (예: 서랍 1층)" aria-label="새 보관 위치">
-          <button class="pill blue" type="submit">추가</button>
-          <button class="pill text" type="button" onclick="App.locAddClose()">취소</button>
-        </form>` : ''}
       </div>
 
       <div class="row">
@@ -617,8 +620,21 @@
           <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름으로 찾기" value="${esc(L.q)}" oninput="App.locSearch(this.value)">
         </label>
         <div class="list" id="locsearch">${locateSearchHtml()}</div>
+      </div>
+
+      <div class="card">
+        <b>보관 위치 선택</b>
+        <div class="locs">
+          ${locs.map(placeBtn).join('')}
+          ${L.adding ? '' : '<button class="chip" aria-label="새 보관 위치 추가" onclick="App.locAddOpen()" style="font-size:18px; font-weight:700;">+</button>'}
+        </div>
+        ${L.adding ? `<form class="row" onsubmit="event.preventDefault(); App.locNewPlace(this)">
+          <input class="input grow" name="place" id="newplace" placeholder="새 위치 이름 (예: 서랍 1층)" aria-label="새 보관 위치">
+          <button class="pill blue" type="submit">추가</button>
+          <button class="pill text" type="button" onclick="App.locAddClose()">취소</button>
+        </form>` : ''}
         <button class="btn" onclick="App.locSave()" ${!L.place || !L.sel.length || S.busy ? 'disabled' : ''}>
-          ${!L.place ? '위에서 보관 위치를 골라 주세요' : `선택한 ${L.sel.length}개를 '${esc(L.place)}'에 저장`}</button>
+          ${!L.sel.length ? '저장할 물건을 골라 주세요' : !L.place ? '보관 위치를 골라 주세요' : `선택한 ${L.sel.length}개를 '${esc(L.place)}'에 저장`}</button>
       </div>` : ''}
     </div>`;
   }
@@ -852,14 +868,14 @@
     locByName() {
       const L = S.locate;
       L.mode = 'name'; L.photo = ''; L.error = ''; L.unknown = [];
-      L.list = []; L.sel = []; L.q = ''; L.matched = true;
+      L.list = []; L.sel = []; L.qty = {}; L.q = ''; L.matched = true;
       render();
     },
     async locPhoto(input) {
       const file = input.files && input.files[0];
       if (!file) return;
       const L = S.locate;
-      L.error = ''; L.mode = 'photo'; L.matched = false; L.list = []; L.sel = []; L.unknown = []; L.q = '';
+      L.error = ''; L.mode = 'photo'; L.matched = false; L.list = []; L.sel = []; L.qty = {}; L.unknown = []; L.q = '';
       input.value = ''; // 같은 사진을 다시 골라도 동작하게
       try { L.photo = await resizeImage(file); } catch (e) { L.error = errMsg(e); render(); return; }
       await withBusy(async () => {
@@ -887,6 +903,11 @@
         L.q = '';
       });
     },
+    locQty(id, n) {
+      if (n < 1) return;
+      S.locate.qty[id] = n;
+      render();
+    },
     locToggle(id) {
       const L = S.locate;
       L.sel = L.sel.includes(id) ? L.sel.filter(x => x !== id) : [...L.sel, id];
@@ -904,9 +925,18 @@
       const L = S.locate;
       if (!L.place || !L.sel.length) return;
       const place = L.place, ids = [...L.sel];
+      const qtyChanges = ids
+        .map(id => ({ id, q: L.qty[id], it: S.items.find(x => x.id === id) }))
+        .filter(x => x.it && x.q != null && x.q !== x.it.quantity);
       withBusy(async () => {
         const { error } = await sb.from('inv_items').update({ location: place }).in('id', ids);
         if (error) throw error;
+        for (const c of qtyChanges) {
+          const patch = { quantity: c.q };
+          if (c.it.status === '판매완료') patch.status = '판매중';
+          const { error: qErr } = await sb.from('inv_items').update(patch).eq('id', c.id);
+          if (qErr) throw qErr;
+        }
         await loadItems();
         // 같은 사람으로 다음 위치를 바로 이어서 등록할 수 있게 화면은 그대로
         S.locate = emptyLocate(S.locate.owner);
