@@ -149,7 +149,7 @@
   // ------------------------------------------------------------------
   const S = {
     session: null, me: null, members: [], items: [],
-    view: 'list', itemId: null,
+    view: 'list', itemId: null, hist: [],
     filter: { owner: 'all', status: 'active', q: '', loc: '', locOwner: '' },
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
@@ -424,7 +424,7 @@
     if (!it) { S.view = 'list'; return viewList(); }
     const owners = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['', '공금']];
     return `<div class="page">
-      <div class="top"><button class="icon-btn" aria-label="재고 목록으로" onclick="App.go('list')">${ICON.back}</button><h1></h1></div>
+      <div class="top"><button class="icon-btn" aria-label="뒤로" onclick="App.back()">${ICON.back}</button><h1></h1></div>
       ${it.image_url ? `<img class="hero" src="${esc(it.image_url)}" alt="" referrerpolicy="no-referrer">` : '<div class="hero">사진 없음</div>'}
       <div class="row" style="align-items:flex-start;">
         <div class="grow"><h2 style="margin:0; font-size:22px;">${esc(it.title)}</h2>
@@ -690,6 +690,47 @@
     if (i >= 0) S.items[i] = data;
   }
 
+  // ------------------------------------------------------------------
+  // 화면 이동 기록 (뒤로 가기용)
+  // ------------------------------------------------------------------
+  function afterNav(view) {
+    if (view === 'connect') loadRuns();
+    if (view === 'move') loadTransfers();
+  }
+  function navTo(view, itemId = null) {
+    if (view === S.view && itemId === S.itemId) return;
+    S.hist.push({ view: S.view, itemId: S.itemId, y: window.scrollY });
+    if (S.hist.length > 30) S.hist.shift();
+    S.view = view; S.itemId = itemId; S.addingLoc = false;
+    window.scrollTo(0, 0);
+    render();
+    afterNav(view);
+  }
+  function resetHome() {
+    S.filter = { owner: (S.me && S.me.user_id) || 'all', status: 'active', q: '', loc: '', locOwner: '' };
+    S.hist = [];
+    S.view = 'list';
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // 왼쪽에서 오른쪽으로 밀면 뒤로 가기
+  let swipe = null;
+  document.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || !S.me) { swipe = null; return; }
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') { swipe = null; return; }
+    const t = e.touches[0];
+    swipe = { x: t.clientX, y: t.clientY, at: Date.now() };
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (!swipe) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, dt = Date.now() - swipe.at;
+    swipe = null;
+    if (dx > 80 && Math.abs(dy) < 60 && dt < 700) App.back();
+  }, { passive: true });
+
   window.App = {
     authTab(t) { S.authTab = t; S.authErr = ''; S.authMsg = ''; render(); },
     async login(form) {
@@ -721,11 +762,19 @@
     async logout() { await sb.auth.signOut(); },
 
     go(view) {
-      S.view = view; window.scrollTo(0, 0); render();
-      if (view === 'connect') loadRuns();
-      if (view === 'move') loadTransfers();
+      // 재고 화면에서 재고 버튼을 한 번 더 누르면 처음 화면으로
+      if (view === 'list' && S.view === 'list') return resetHome();
+      navTo(view);
     },
-    open(id) { S.itemId = id; S.view = 'detail'; S.addingLoc = false; window.scrollTo(0, 0); render(); },
+    back() {
+      const prev = S.hist.pop();
+      if (!prev) { if (S.view !== 'list') { S.view = 'list'; render(); } return; }
+      S.view = prev.view; S.itemId = prev.itemId; S.addingLoc = false;
+      render();
+      window.scrollTo(0, prev.y || 0);
+      afterNav(prev.view);
+    },
+    open(id) { navTo('detail', id); },
     // 홈 새로고침: 두 사람 당근 프로필을 모두 가져와 동기화
     async refresh() {
       if (S.busy) return;
@@ -822,7 +871,7 @@
         const i = S.items.findIndex(x => x.id === id);
         if (i >= 0) S.items[i] = data;
         toast(data.quantity === 0 ? '판매완료! 재고에서 빠졌어요' : `1개 판매 · ${data.quantity}개 남았어요`);
-        if (data.quantity === 0) S.view = 'list';
+        if (data.quantity === 0) { S.view = 'list'; S.hist = []; }
       });
     },
 
