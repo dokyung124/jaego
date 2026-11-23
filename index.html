@@ -474,12 +474,16 @@
 
       <div class="card">
         <div class="row"><b class="grow">보관 위치</b><span class="muted">${esc(it.location || '정하지 않음')}</span></div>
-        ${locations(ownerKey(it)).length ? `<div class="locs">${locations(ownerKey(it)).map(l => `<button class="chip ${it.location === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.setLoc(${it.id}, this.dataset.loc)">${esc(l)}</button>`).join('')}
-          ${it.location ? `<button class="chip" onclick="App.setLoc(${it.id}, '')">위치 빼기</button>` : ''}</div>` : ''}
-        <form class="row" onsubmit="event.preventDefault(); App.addLoc(${it.id}, this)">
-          <input class="input grow" name="newloc" placeholder="새 위치 입력 (예: 서랍 1층)" aria-label="새 보관 위치">
-          <button class="btn sm" type="submit" style="width:auto; padding:0 16px;">추가</button>
-        </form>
+        <div class="locs">
+          ${locations(ownerKey(it)).map(l => `<button class="chip ${it.location === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.setLoc(${it.id}, this.dataset.loc)">${esc(l)}</button>`).join('')}
+          ${it.location ? `<button class="chip" onclick="App.setLoc(${it.id}, '')">위치 빼기</button>` : ''}
+          ${S.addingLoc ? '' : `<button class="chip" aria-label="새 보관 위치 추가" onclick="App.addLocOpen()" style="font-size:18px; font-weight:700;">+</button>`}
+        </div>
+        ${S.addingLoc ? `<form class="row" onsubmit="event.preventDefault(); App.addLoc(${it.id}, this)">
+          <input class="input grow" name="newloc" id="newloc" placeholder="새 위치 이름 (예: 서랍 1층)" aria-label="새 보관 위치">
+          <button class="pill blue" type="submit">추가</button>
+          <button class="pill text" type="button" onclick="App.addLocClose()">취소</button>
+        </form>` : ''}
       </div>
     </div>`;
   }
@@ -715,7 +719,7 @@
       if (view === 'connect') loadRuns();
       if (view === 'move') loadTransfers();
     },
-    open(id) { S.itemId = id; S.view = 'detail'; window.scrollTo(0, 0); render(); },
+    open(id) { S.itemId = id; S.view = 'detail'; S.addingLoc = false; window.scrollTo(0, 0); render(); },
     // 홈 새로고침: 두 사람 당근 프로필을 모두 가져와 동기화
     async refresh() {
       if (S.busy) return;
@@ -749,9 +753,15 @@
         toast(v ? `보관 위치: ${v}` : '보관 위치를 뺐어요');
       });
     },
+    addLocOpen() {
+      S.addingLoc = true; render();
+      const el = document.getElementById('newloc'); if (el) el.focus();
+    },
+    addLocClose() { S.addingLoc = false; render(); },
     addLoc(id, form) {
       const v = form.newloc.value.trim();
       if (!v) return;
+      S.addingLoc = false;
       withBusy(async () => {
         await patchItem(id, { location: v });
         toast(`보관 위치: ${v}`);
