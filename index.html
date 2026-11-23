@@ -154,7 +154,7 @@
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
     moveQ: '', moveQty: {}, transfers: [],
-    locate: { owner: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' },
+    locate: { owner: '', renaming: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' },
     busy: false,
   };
 
@@ -544,7 +544,7 @@
   // 화면: 사진으로 보관 위치 한 번에 정하기
   // ------------------------------------------------------------------
   function emptyLocate(owner = '') {
-    return { owner, place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' };
+    return { owner, renaming: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' };
   }
   function locateSearchHtml() {
     const L = S.locate, q = L.q.trim().toLowerCase();
@@ -560,6 +560,28 @@
       ${thumb(it)}<div class="grow"><div class="title">${esc(it.title)}</div>
       <div class="muted">${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div></div>
       <span class="pill">추가</span></button>`).join('');
+  }
+  // 보관 위치 이름 바꾸기 (고른 사람·공금의 위치만)
+  function manageLocsHtml(ok) {
+    const L = S.locate;
+    const locs = locations(ok);
+    if (!locs.length) return '';
+    const count = l => S.items.filter(it => ownerKey(it) === ok && it.location === l && (it.status === '판매중' || it.status === '예약중')).length;
+    return `<div class="card">
+      <b>${esc(ownerKeyName(ok))} 보관 위치</b>
+      <div class="list" style="gap:6px;">
+        ${locs.map(l => L.renaming === l
+          ? `<form class="row" onsubmit="event.preventDefault(); App.locRenameSave(this)">
+              <input class="input grow" name="newname" id="renameloc" value="${esc(l)}" aria-label="새 위치 이름">
+              <button class="pill blue" type="submit">저장</button>
+              <button class="pill text" type="button" onclick="App.locRenameClose()">취소</button>
+            </form>`
+          : `<div class="row" style="min-height:40px;">
+              <div class="grow">${esc(l)} <span class="muted">· ${count(l)}개</span></div>
+              <button class="pill" data-loc="${esc(l)}" onclick="App.locRenameOpen(this.dataset.loc)">이름 수정</button>
+            </div>`).join('')}
+      </div>
+    </div>`;
   }
   function locOwner() { return S.locate.owner || (S.me && S.me.user_id) || 'shared'; }
   function viewLocate() {
@@ -611,6 +633,7 @@
       </div>
       ${L.error ? `<p class="err" style="margin:0;">${esc(L.error)}</p>` : ''}
       ${L.mode === 'photo' && L.photo ? `<img class="preview" src="${L.photo}" alt="찍은 사진">` : ''}
+      ${!L.matched && !S.busy ? manageLocsHtml(ok) : ''}
 
       ${L.matched ? `<div class="card">
         <p class="muted" style="margin:0;">${intro}</p>
@@ -913,6 +936,29 @@
       const v = form.place.value.trim();
       if (!v) return;
       S.locate.place = v; S.locate.adding = false; render();
+    },
+    locRenameOpen(name) {
+      S.locate.renaming = name; render();
+      const el = document.getElementById('renameloc'); if (el) { el.focus(); el.select(); }
+    },
+    locRenameClose() { S.locate.renaming = ''; render(); },
+    locRenameSave(form) {
+      const L = S.locate, oldName = L.renaming, newName = form.newname.value.trim();
+      if (!oldName) return;
+      if (!newName || newName === oldName) { L.renaming = ''; render(); return; }
+      const ok = locOwner();
+      const merged = locations(ok).includes(newName);
+      const n = S.items.filter(it => ownerKey(it) === ok && it.location === oldName).length;
+      withBusy(async () => {
+        let q = sb.from('inv_items').update({ location: newName }).eq('location', oldName);
+        q = ok === 'shared' ? q.is('owner_user', null) : q.eq('owner_user', ok);
+        const { error } = await q;
+        if (error) throw error;
+        await loadItems();
+        if (L.place === oldName) L.place = newName;
+        L.renaming = '';
+        toast(merged ? `'${oldName}' 물건 ${n}개를 '${newName}'에 합쳤어요` : `'${oldName}'을 '${newName}'(으)로 바꿨어요`);
+      });
     },
     locByName() {
       const L = S.locate;
