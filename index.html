@@ -181,6 +181,11 @@
     const meId = S.me && S.me.user_id;
     return [...S.members].sort((a, b) => (a.user_id === meId ? -1 : 0) - (b.user_id === meId ? -1 : 0));
   }
+  // 공금 물건은 누구 당근 계정에 올라가 있는지 함께 (예: 공금 · 길동 당근)
+  function ownerLabel(it) {
+    if (it.owner_user) return ownerName(it.owner_user);
+    return it.posted_by ? `공금 · ${ownerName(it.posted_by)} 당근` : '공금';
+  }
   function ownerName(uid) {
     if (!uid) return '공금';
     const m = S.members.find(x => x.user_id === uid);
@@ -391,7 +396,7 @@
         ${thumb(it)}
         <div class="grow" style="display:flex; flex-direction:column; gap:4px;">
           <div class="title">${esc(it.title)}</div>
-          <div class="muted">${esc(ownerName(it.owner_user))}${it.location ? ' · ' + esc(it.location) : ''} · ${won(it.price)}</div>
+          <div class="muted">${esc(ownerLabel(it))}${it.location ? ' · ' + esc(it.location) : ''} · ${won(it.price)}</div>
           ${it.expiry_date ? `<div class="muted">기한 ${fmtYMD(it.expiry_date)}</div>` : ''}
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
@@ -467,7 +472,8 @@
       ${it.image_url ? `<img class="hero" src="${esc(it.image_url)}" alt="" referrerpolicy="no-referrer">` : '<div class="hero">사진 없음</div>'}
       <div class="row" style="align-items:flex-start;">
         <div class="grow"><h2 style="margin:0; font-size:22px;">${esc(it.title)}</h2>
-          <p class="sub">${won(it.price)}${it.region ? ' · ' + esc(it.region) : ''}</p></div>
+          <p class="sub">${won(it.price)}${it.region ? ' · ' + esc(it.region) : ''}</p>
+          ${!it.owner_user && it.posted_by ? `<p class="sub" style="color: var(--blue-ink);">공금 · ${esc(ownerName(it.posted_by))}님 당근 계정에 올라가 있어요</p>` : ''}</div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">${statusBadge(it)}${expiryBadge(it, true)}</div>
       </div>
 
@@ -588,7 +594,7 @@
   function locateSearchHtml() {
     const L = S.locate, q = L.q.trim().toLowerCase();
     const base = S.items.filter(it => (it.status === '판매중' || it.status === '예약중') && it.quantity > 0
-      && ownerKey(it) === locOwner() && !L.list.includes(it.id));
+      && inLocScope(it) && !L.list.includes(it.id));
     let res;
     if (q) res = base.filter(it => it.title.toLowerCase().includes(q)).slice(0, 12);
     else if (L.mode === 'name') res = base.filter(it => !it.location).slice(0, 20); // 검색 전: 위치 없는 물건부터
@@ -597,7 +603,7 @@
     return (!q && L.mode === 'name' ? '<div class="muted" style="font-size:12px;">위치가 아직 없는 물건</div>' : '') +
       res.map(it => `<button class="pick-row" onclick="App.locAdd(${it.id})">
       ${zoomThumb(it)}<div class="grow"><div class="title">${esc(it.title)}</div>
-      <div class="muted">${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div></div>
+      <div class="muted">${locOwner() === 'shared' ? esc(ownerLabel(it)) + ' · ' : ''}${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div></div>
       <span class="pill">추가</span></button>`).join('');
   }
   // 보관 위치 이름 바꾸기 (고른 사람·공금의 위치만)
@@ -622,6 +628,8 @@
       </div>
     </div>`;
   }
+  // 공금으로 등록할 때는 모든 사람의 재고에서 찾음
+  function inLocScope(it) { return locOwner() === 'shared' || ownerKey(it) === locOwner(); }
   function locOwner() { return S.locate.owner || (S.me && S.me.user_id) || 'shared'; }
   function viewLocate() {
     const L = S.locate;
@@ -639,7 +647,7 @@
         <button class="pick-main" onclick="App.locToggle(${id})" aria-pressed="${on}" aria-label="${esc(it.title)} 선택">
           <span class="check">${on ? '✓' : ''}</span>${zoomThumb(it)}
           <div class="grow" style="min-width:0;"><div class="title">${esc(it.title)}</div>
-          <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div>
+          <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locOwner() === 'shared' ? esc(ownerLabel(it)) + ' · ' : ''}${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div>
           ${q !== it.quantity ? `<div style="font-size:12px; color: var(--blue-ink);">원래 ${it.quantity}개</div>` : ''}</div>
         </button>
         ${on ? `<div class="stepper sm">
@@ -1017,7 +1025,7 @@
       try { L.photo = await resizeImage(file); } catch (e) { L.error = errMsg(e); render(); return; }
       await withBusy(async () => {
         const { data, error } = await sb.functions.invoke('daangn-sync', {
-          body: { action: 'match_photo', image: L.photo.split(',')[1], mime: 'image/jpeg', owner: locOwner() },
+          body: { action: 'match_photo', image: L.photo.split(',')[1], mime: 'image/jpeg', owner: locOwner() === 'shared' ? 'all' : locOwner() },
         });
         if (error) {
           let msg = errMsg(error);
@@ -1030,10 +1038,10 @@
         for (const id of [...ids]) {
           const it = S.items.find(x => x.id === id);
           if (it && it.daangn_article_id) S.items.forEach(x => {
-            if (x.daangn_article_id === it.daangn_article_id && ownerKey(x) === locOwner() && x.quantity > 0 && (x.status === '판매중' || x.status === '예약중')) ids.add(x.id);
+            if (x.daangn_article_id === it.daangn_article_id && inLocScope(x) && x.quantity > 0 && (x.status === '판매중' || x.status === '예약중')) ids.add(x.id);
           });
         }
-        L.list = [...ids].filter(id => S.items.some(x => x.id === id && ownerKey(x) === locOwner()));
+        L.list = [...ids].filter(id => S.items.some(x => x.id === id && inLocScope(x)));
         L.sel = [...L.list];
         L.unknown = data.unknown || [];
         L.matched = true;
@@ -1065,6 +1073,22 @@
       const qtyChanges = ids
         .map(id => ({ id, q: L.qty[id], it: S.items.find(x => x.id === id) }))
         .filter(x => x.it && x.q != null && x.q !== x.it.quantity);
+      if (locOwner() === 'shared') {
+        // 공금으로 등록: 다른 사람이 갖고 있던 재고는 없애고 공금으로 넘김 (기록은 공금 이동에 남음)
+        const moved = ids.filter(id => { const it = S.items.find(x => x.id === id); return it && it.owner_user; }).length;
+        withBusy(async () => {
+          for (const id of ids) {
+            const it = S.items.find(x => x.id === id);
+            const q = L.qty[id] ?? (it ? it.quantity : 1);
+            const { error } = await sb.rpc('inv_register_shared', { p_item_id: id, p_qty: q, p_location: place });
+            if (error) throw error;
+          }
+          await loadItems();
+          S.locate = emptyLocate(S.locate.owner);
+          toast(`${ids.length}개를 공금 '${place}'에 저장했어요${moved ? ` (다른 사람 재고 ${moved}개는 공금으로 옮김)` : ''}`);
+        });
+        return;
+      }
       withBusy(async () => {
         const { error } = await sb.from('inv_items').update({ location: place }).in('id', ids);
         if (error) throw error;
