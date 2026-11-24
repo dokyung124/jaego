@@ -113,9 +113,13 @@
   .pick-row.on .check { background: var(--blue); border-color: var(--blue); }
   .preview { width: 100%; max-height: 260px; object-fit: contain; border-radius: 12px; background: var(--line); }
   .thumb-zoom { display: inline-flex; flex-shrink: 0; border-radius: 10px; cursor: zoom-in; }
-  .viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: flex; align-items: center; justify-content: center;
+  .viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
     padding: calc(env(safe-area-inset-top) + 56px) 12px calc(env(safe-area-inset-bottom) + 24px); }
-  .viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+  .viewer img { max-width: 100%; max-height: calc(100% - 110px); min-height: 0; object-fit: contain; border-radius: 8px; }
+  .viewer-bar { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+  .viewer-title { color: #fff; font-size: 15px; font-weight: 500; text-align: center; padding: 0 12px; }
+  .viewer-link { height: 44px; padding: 0 18px; border-radius: 22px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px; }
   .viewer-close { position: fixed; top: calc(env(safe-area-inset-top) + 8px); right: 12px; width: 44px; height: 44px; border: 0; border-radius: 22px;
     background: rgba(255,255,255,.15); color: #fff; font-size: 20px; cursor: pointer; }
   .spin svg { animation: spin 1s linear infinite; }
@@ -155,7 +159,7 @@
   // ------------------------------------------------------------------
   const S = {
     session: null, me: null, members: [], items: [],
-    view: 'list', itemId: null, hist: [], viewer: '',
+    view: 'list', itemId: null, hist: [], viewer: null,
     filter: { owner: 'all', status: 'active', q: '', loc: '', locOwner: '' },
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
@@ -240,13 +244,19 @@
   // 누르면 사진을 크게 보는 썸네일 (줄 전체의 선택·추가 동작과 따로)
   function zoomThumb(it) {
     if (!it.image_url) return thumb(it);
-    return `<span class="thumb-zoom" role="button" tabindex="0" aria-label="사진 크게 보기" data-src="${esc(it.image_url)}"
-      onclick="event.stopPropagation(); App.viewPhoto(this.dataset.src)">${thumb(it)}</span>`;
+    return `<span class="thumb-zoom" role="button" tabindex="0" aria-label="사진 크게 보기"
+      onclick="event.stopPropagation(); App.viewPhoto(${it.id})">${thumb(it)}</span>`;
   }
   function viewerHtml() {
+    const it = S.items.find(x => x.id === S.viewer);
+    if (!it || !it.image_url) return '';
     return `<div class="viewer" onclick="App.closePhoto()" role="dialog" aria-label="사진 크게 보기">
       <button class="viewer-close" aria-label="닫기" onclick="event.stopPropagation(); App.closePhoto()">✕</button>
-      <img src="${esc(S.viewer)}" alt="" referrerpolicy="no-referrer">
+      <img src="${esc(it.image_url)}" alt="" referrerpolicy="no-referrer">
+      <div class="viewer-bar" onclick="event.stopPropagation()">
+        <div class="viewer-title">${esc(it.title)}</div>
+        ${it.daangn_url ? `<a class="viewer-link" href="${esc(it.daangn_url)}" target="_blank" rel="noopener">당근에서 판매글 보기 ${ICON.out}</a>` : ''}
+      </div>
     </div>`;
   }
   const ICON = {
@@ -807,10 +817,10 @@
       if (view === 'list' && S.view === 'list') return resetHome();
       navTo(view);
     },
-    viewPhoto(src) { if (src) { S.viewer = src; render(); } },
-    closePhoto() { S.viewer = ''; render(); },
+    viewPhoto(id) { if (id) { S.viewer = id; render(); } },
+    closePhoto() { S.viewer = null; render(); },
     back() {
-      if (S.viewer) { S.viewer = ''; render(); return; } // 크게 보기 중이면 닫기만
+      if (S.viewer) { S.viewer = null; render(); return; } // 크게 보기 중이면 닫기만
       const prev = S.hist.pop();
       if (!prev) { if (S.view !== 'list') { S.view = 'list'; render(); } return; }
       S.view = prev.view; S.itemId = prev.itemId; S.addingLoc = false;
