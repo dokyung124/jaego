@@ -349,7 +349,18 @@
       if (ok && ownerKey(it) !== ok) continue;
       set.add(it.location);
     }
-    return [...set].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    return [...set].sort(locCompare);
+  }
+  // 보관 위치 정렬: 한글(가나다) → 영어 → 숫자로 시작하는 이름 순, 안의 숫자는 1, 2, 10 처럼 크기 순
+  function locRank(x) {
+    const c = (x || '').trim().charAt(0);
+    if (/[가-힣ㄱ-ㅎ]/.test(c)) return 0;
+    if (/[a-z]/i.test(c)) return 1;
+    if (/[0-9]/.test(c)) return 2;
+    return 3;
+  }
+  function locCompare(a, b) {
+    return (locRank(a) - locRank(b)) || a.localeCompare(b, 'ko', { numeric: true, sensitivity: 'base' });
   }
   function filteredItems() {
     const f = S.filter, q = f.q.trim().toLowerCase();
@@ -616,7 +627,7 @@
     const L = S.locate;
     const ok = locOwner();
     const locs = locations(ok);
-    if (L.place && !locs.includes(L.place)) locs.push(L.place); // 새로 만든 위치도 버튼으로
+    if (L.place && !locs.includes(L.place)) { locs.push(L.place); locs.sort(locCompare); } // 새로 만든 위치도 순서에 맞게
     const ownerOpts = [...membersMeFirst().map(m => [m.user_id, m.display_name]), ['shared', '공금']];
     const placeBtn = l => `<button class="chip ${L.place === l ? 'on' : ''}" data-loc="${esc(l)}" onclick="App.locPlace(this.dataset.loc)">${esc(l)}</button>`;
     const rows = L.list.map(id => {
