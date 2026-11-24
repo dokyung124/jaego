@@ -122,6 +122,11 @@
     display: inline-flex; align-items: center; gap: 6px; }
   .viewer-close { position: fixed; top: calc(env(safe-area-inset-top) + 8px); right: 12px; width: 44px; height: 44px; border: 0; border-radius: 22px;
     background: rgba(255,255,255,.15); color: #fff; font-size: 20px; cursor: pointer; }
+  #undo { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 11;
+    display: none; align-items: center; gap: 12px; width: max-content; max-width: calc(100% - 32px);
+    background: var(--ink); color: #fff; padding: 8px 8px 8px 16px; border-radius: 12px; font-size: 14px; }
+  #undo.show { display: flex; }
+  #undo-btn { height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 700; cursor: pointer; }
   .spin svg { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff;
@@ -134,6 +139,7 @@
 <body>
 <div class="wrap" id="app"><div class="page"><p class="muted">불러오는 중…</p></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="undo" role="status" aria-live="polite"><span id="undo-text"></span><button id="undo-btn" type="button">되돌리기</button></div>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -203,6 +209,23 @@
     const d = new Date(iso);
     return (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
   }
+  // 잠깐 떠 있는 "되돌리기" 알림 (6초)
+  let undoTimer, undoFn = null;
+  function showUndo(msg, fn) {
+    const box = document.getElementById('undo');
+    document.getElementById('toast').classList.remove('show');
+    document.getElementById('undo-text').textContent = msg;
+    undoFn = fn;
+    box.classList.add('show');
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hideUndo, 6000);
+  }
+  function hideUndo() { document.getElementById('undo').classList.remove('show'); undoFn = null; }
+  document.getElementById('undo-btn').addEventListener('click', () => {
+    const fn = undoFn;
+    hideUndo();
+    if (fn) fn();
+  });
   let toastTimer;
   function toast(msg) {
     const t = document.getElementById('toast');
@@ -496,9 +519,13 @@
             <button aria-label="수량 1개 줄이기" onclick="App.setQty(${it.id}, ${it.quantity - 1})" ${it.quantity <= 0 ? 'disabled' : ''}>−</button>
             <button aria-label="수량 1개 늘리기" onclick="App.setQty(${it.id}, ${it.quantity + 1})">+</button>
           </div>
-          <button class="sell-btn" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>판매완료</button>
         </div>
-        <p class="muted" style="margin:0;">팔았을 때는 "판매완료"를 눌러 주세요. 수량이 1개씩 줄어요. +/− 버튼은 개수를 잘못 셌을 때 고치는 용도예요.</p>
+        <p class="muted" style="margin:0;">−/+ 는 누르면 바로 저장돼요. 개수를 잘못 셌을 때 고치는 용도예요.</p>
+      </div>
+
+      <div class="card" style="gap:8px;">
+        <div class="muted">물건을 팔았을 때</div>
+        <button class="btn sm line" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>1개 판매완료</button>
       </div>
 
       <div class="card">
@@ -943,8 +970,28 @@
         if (error) throw error;
         const i = S.items.findIndex(x => x.id === id);
         if (i >= 0) S.items[i] = data;
-        toast(data.quantity === 0 ? '판매완료! 재고에서 빠졌어요' : `1개 판매 · ${data.quantity}개 남았어요`);
         if (data.quantity === 0) { S.view = 'list'; S.hist = []; }
+        showUndo(data.quantity === 0 ? '판매완료! 재고에서 빠졌어요' : `1개 판매 · ${data.quantity}개 남았어요`, () => App.unsell(id));
+      });
+    },
+    // 판매완료 되돌리기: 수량 1개 되돌리고, 방금 남은 판매 기록 1줄 지움
+    unsell(id) {
+      withBusy(async () => {
+        const { data: last } = await sb.from('inv_sales').select('id').eq('item_id', id)
+          .order('sold_at', { ascending: false }).limit(1);
+        if (last && last.length) {
+          const { error: dErr } = await sb.from('inv_sales').delete().eq('id', last[0].id);
+          if (dErr) throw dErr;
+        }
+        const { data: cur, error: gErr } = await sb.from('inv_items').select('*').eq('id', id).single();
+        if (gErr) throw gErr;
+        const patch = { quantity: cur.quantity + 1 };
+        if (cur.status === '판매완료') { patch.status = '판매중'; patch.sold_at = null; }
+        const { data: upd, error: uErr } = await sb.from('inv_items').update(patch).eq('id', id).select().single();
+        if (uErr) throw uErr;
+        const i = S.items.findIndex(x => x.id === id);
+        if (i >= 0) S.items[i] = upd; else S.items.unshift(upd);
+        toast('판매완료를 되돌렸어요');
       });
     },
 
