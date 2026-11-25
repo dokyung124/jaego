@@ -172,7 +172,7 @@
     filter: { owner: 'all', status: 'active', q: '', loc: '', locOwner: '' },
     authTab: 'login', authMsg: '', authErr: '',
     runs: [],
-    moveQ: '', moveQty: {}, transfers: [],
+
     locate: { owner: '', renaming: '', place: '', adding: false, mode: '', photo: '', list: [], sel: [], qty: {}, unknown: [], matched: false, error: '', q: '' },
     busy: false,
   };
@@ -235,6 +235,7 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
+  const APP_VERSION = '11.25-3';
   function errMsg(e) {
     const m = (e && (e.message || e.error_description || e.error)) || String(e);
     if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요';
@@ -536,7 +537,7 @@
         <div class="seg" role="group" aria-label="소유자">
           ${owners.map(([v, n]) => `<button class="${(it.owner_user || '') === v ? 'on' : ''}" onclick="App.setOwner(${it.id}, '${v}')">${esc(n)}</button>`).join('')}
         </div>
-        <p class="muted" style="margin:0;">A·B님 물건을 공금으로 넘길 때는 "공금 이동"을 쓰면 기록이 남아요.</p>
+        <p class="muted" style="margin:0;">공금을 고르면 개수와 보관 위치 그대로 공금으로 옮겨져요.</p>
       </div>
 
       <div class="card">
@@ -601,41 +602,7 @@
       </div>
       <div class="card"><div class="muted">${esc(S.me.display_name)}님으로 로그인 중 · ${esc(S.me.email)}</div>
         <button class="btn sm line" onclick="App.logout()">로그아웃</button></div>
-    </div>`;
-  }
-
-  // ------------------------------------------------------------------
-  // 화면: 공금 이동
-  // ------------------------------------------------------------------
-  function viewMove() {
-    const q = S.moveQ.trim().toLowerCase();
-    const list = S.items.filter(it => it.owner_user && it.quantity > 0 && it.status === '판매중'
-      && (!q || `${it.title} ${it.location || ''}`.toLowerCase().includes(q))).slice(0, 60);
-    const rows = list.map(it => {
-      const n = Math.min(S.moveQty[it.id] || 1, it.quantity);
-      return `<div class="card" style="padding:12px;">
-        <div class="row">${thumb(it)}<div class="grow"><div class="title">${esc(it.title)}</div>
-          <div class="muted">${esc(ownerName(it.owner_user))} → <b style="color:var(--blue-ink)">공금</b> · 보유 ${it.quantity}개</div></div></div>
-        <div class="row">
-          <div class="stepper">
-            <button aria-label="옮길 수량 줄이기" onclick="App.moveQty(${it.id}, ${n - 1}, ${it.quantity})">−</button>
-            <span>${n}</span>
-            <button aria-label="옮길 수량 늘리기" onclick="App.moveQty(${it.id}, ${n + 1}, ${it.quantity})">+</button>
-          </div>
-          <button class="btn sm grow" onclick="App.move(${it.id}, ${n})" ${S.busy ? 'disabled' : ''}>${n}개 공금으로</button>
-        </div>
-      </div>`;
-    }).join('');
-    const monthTotal = S.transfers.reduce((a, t) => a + t.quantity, 0);
-    return `<div class="page">
-      <div class="top"><h1>공금으로 옮기기</h1></div>
-      <label class="search">${ICON.search}
-        <input type="search" aria-label="옮길 물건 검색" placeholder="옮길 물건 검색" value="${esc(S.moveQ)}" oninput="App.moveSearch(this.value)">
-      </label>
-      <div class="list" id="movelist">${rows || '<p class="empty">옮길 수 있는 A·B님 물건이 없어요</p>'}</div>
-      <div class="card"><b>이번 달 옮긴 물건 ${monthTotal}개</b>
-        ${S.transfers.map(t => `<div class="muted">${fmtDate(t.moved_at)} · ${esc(t.title)} ${t.quantity}개 (${esc(ownerName(t.from_user))} → 공금)</div>`).join('') || '<div class="muted">아직 없어요</div>'}
-      </div>
+      <div class="muted" style="text-align:center; font-size:12px;">앱 버전 ${APP_VERSION}</div>
     </div>`;
   }
 
@@ -786,7 +753,7 @@
   // 그리기
   // ------------------------------------------------------------------
   function nav() {
-    const tabs = [['list', '재고', ICON.box], ['locate', '위치 등록', ICON.pin], ['move', '공금 이동', ICON.move], ['connect', '당근 연결', ICON.sync]];
+    const tabs = [['list', '재고', ICON.box], ['locate', '위치 등록', ICON.pin], ['connect', '당근 연결', ICON.sync]];
     const cur = S.view === 'detail' ? 'list' : S.view;
     return `<nav class="bottom" aria-label="하단 메뉴"><div class="in">
       ${tabs.map(([v, n, i]) => `<button class="${cur === v ? 'on' : ''}" onclick="App.go('${v}')" ${cur === v ? 'aria-current="page"' : ''}>${i}${n}</button>`).join('')}
@@ -794,7 +761,7 @@
   }
   function render() {
     if (!S.session || !S.me) { $app.innerHTML = viewAuth(); return; }
-    const v = { list: viewList, detail: viewDetail, connect: viewConnect, move: viewMove, locate: viewLocate }[S.view] || viewList;
+    const v = { list: viewList, detail: viewDetail, connect: viewConnect, locate: viewLocate }[S.view] || viewList;
     $app.innerHTML = v() + nav() + (S.viewer ? viewerHtml() : '');
   }
 
@@ -819,7 +786,6 @@
   // ------------------------------------------------------------------
   function afterNav(view) {
     if (view === 'connect') loadRuns();
-    if (view === 'move') loadTransfers();
   }
   function navTo(view, itemId = null) {
     if (view === S.view && itemId === S.itemId) return;
@@ -1156,7 +1122,7 @@
         .map(id => ({ id, q: L.qty[id], it: S.items.find(x => x.id === id) }))
         .filter(x => x.it && x.q != null && x.q !== x.it.quantity);
       if (locOwner() === 'shared') {
-        // 공금으로 등록: 다른 사람이 갖고 있던 재고는 없애고 공금으로 넘김 (기록은 공금 이동에 남음)
+        // 공금으로 등록: 다른 사람이 갖고 있던 재고는 없애고 공금으로 넘김 
         const moved = ids.filter(id => { const it = S.items.find(x => x.id === id); return it && it.owner_user; }).length;
         withBusy(async () => {
           for (const id of ids) {
@@ -1187,31 +1153,12 @@
       });
     },
 
-    moveSearch(v) { S.moveQ = v; const el = document.getElementById('movelist'); const tmp = document.createElement('div'); tmp.innerHTML = viewMove(); el.replaceWith(tmp.querySelector('#movelist')); },
-    moveQty(id, n, max) { S.moveQty[id] = Math.max(1, Math.min(n, max)); render(); },
-    move(id, n) {
-      withBusy(async () => {
-        const { data, error } = await sb.rpc('inv_move_to_shared', { p_item_id: id, p_qty: n });
-        if (error) throw error;
-        delete S.moveQty[id];
-        await Promise.all([loadItems(), loadTransfers()]);
-        const loc = data && data.location;
-        toast(loc ? `${n}개를 공금으로 옮겼어요 · 위치: ${loc}` : `${n}개를 공금으로 옮겼어요`);
-      });
-    },
-
   };
 
   async function loadRuns() {
     const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(1);
     S.runs = data || [];
     if (S.view === 'connect') render();
-  }
-  async function loadTransfers() {
-    const start = monthStart(new Date());
-    const { data } = await sb.from('inv_transfers').select('*').gte('moved_at', start.toISOString()).order('moved_at', { ascending: false });
-    S.transfers = data || [];
-    if (S.view === 'move') render();
   }
 
   // ------------------------------------------------------------------
