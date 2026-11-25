@@ -127,6 +127,9 @@
     background: var(--ink); color: #fff; padding: 8px 8px 8px 16px; border-radius: 12px; font-size: 14px; }
   #undo.show { display: flex; }
   #undo-btn { height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: #fff; color: var(--ink); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .loc-toggle { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border: 1px solid var(--line2); border-radius: 12px;
+    background: #fff; color: var(--ink2); font: inherit; font-size: 14px; cursor: pointer; width: 100%; text-align: left; }
+  .loc-toggle.on { border-color: var(--blue); color: var(--blue-ink); background: #F4F7FE; }
   .spin svg { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: #fff;
@@ -291,6 +294,7 @@
     back: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
     search: '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B6270" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
     box: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
+    pinSm: '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
     pin: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>',
     move: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
     sync: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg>',
@@ -390,6 +394,28 @@
   function locCompare(a, b) {
     return (locRank(a) - locRank(b)) || a.localeCompare(b, 'ko', { numeric: true, sensitivity: 'base' });
   }
+  // 홈 화면 보관 위치 필터: 고른 사람(또는 공금)의 위치만, 전체면 사람별로 나눠서
+  function locFilterHtml() {
+    const f = S.filter;
+    const active = it => it.status === '판매중' || it.status === '예약중';
+    const keys = f.owner === 'all'
+      ? [...membersMeFirst().map(m => m.user_id), 'shared'].filter(k => locations(k).length)
+      : [f.owner].filter(k => locations(k).length);
+    if (!keys.length) return '';
+    const label = !f.loc ? '전체' : (f.loc === '__none' ? '위치 없음' : f.loc) + (f.owner === 'all' && f.locOwner ? ` (${ownerKeyName(f.locOwner)})` : '');
+    const btn = (k, v, text) => `<button class="chip ${f.loc === v && (!v || f.locOwner === k) ? 'on' : ''}" data-loc="${esc(v)}" data-owner="${esc(k)}" onclick="App.locFilter(this.dataset.loc, this.dataset.owner)">${esc(text)}</button>`;
+    const panel = !S.locOpen ? '' : `<div class="card" style="padding:12px 14px; gap:8px;">
+      <div class="locs">${btn('', '', '전체 위치')}</div>
+      ${keys.map(k => {
+        const noLoc = S.items.some(it => active(it) && ownerKey(it) === k && !it.location);
+        return `${f.owner === 'all' ? `<div class="muted" style="font-size:12px;">${esc(ownerKeyName(k))}</div>` : ''}
+          <div class="locs">${locations(k).map(l => btn(k, l, l)).join('')}${noLoc ? btn(k, '__none', '위치 없음') : ''}</div>`;
+      }).join('')}
+    </div>`;
+    return `<button class="loc-toggle ${f.loc ? 'on' : ''}" onclick="App.locToggleOpen()" aria-expanded="${!!S.locOpen}">
+        ${ICON.pinSm} 보관 위치: <b>${esc(label)}</b><span class="grow"></span>${S.locOpen ? '▴' : '▾'}</button>
+      ${panel}`;
+  }
   function filteredItems() {
     const f = S.filter, q = f.q.trim().toLowerCase();
     return S.items.filter(it => {
@@ -451,6 +477,7 @@
       <label class="search">${ICON.search}
         <input type="search" aria-label="물건 이름 검색" placeholder="물건 이름 검색" value="${esc(f.q)}" oninput="App.search(this.value)">
       </label>
+      ${locFilterHtml()}
       <div class="list" id="list">${listBody()}</div>
     </div>`;
   }
@@ -805,6 +832,7 @@
   }
   function resetHome() {
     S.filter = { owner: (S.me && S.me.user_id) || 'all', status: 'active', q: '', loc: '', locOwner: '' };
+    S.locOpen = false;
     S.hist = [];
     S.view = 'list';
     render();
@@ -901,9 +929,10 @@
       });
     },
     search(v) { S.filter.q = v; document.getElementById('list').innerHTML = listBody(); },
-    ownerFilter(v) { S.filter.owner = v; render(); },
+    ownerFilter(v) { S.filter.owner = v; S.filter.loc = ''; S.filter.locOwner = ''; render(); },
+    locToggleOpen() { S.locOpen = !S.locOpen; render(); },
     statusFilter(v) { S.filter.status = v; render(); },
-    locFilter(v, k) { S.filter.loc = v || ''; S.filter.locOwner = v ? (k || '') : ''; render(); },
+    locFilter(v, k) { S.filter.loc = v || ''; S.filter.locOwner = v ? (k || '') : ''; S.locOpen = false; render(); },
     setLoc(id, v) {
       withBusy(async () => {
         await patchItem(id, { location: v || null });
