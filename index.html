@@ -98,7 +98,7 @@
   .err { color: var(--red); font-size: 13px; }
   nav.bottom { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line);
     padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); }
-  nav.bottom .in { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  nav.bottom .in { max-width: 520px; margin: 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
   nav.bottom button { height: 56px; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; color: var(--mute); cursor: pointer; }
   nav.bottom button.on { color: var(--blue-ink); font-weight: 700; }
   .pick-row { display: flex; align-items: center; gap: 12px; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; width: 100%; text-align: left; cursor: pointer; }
@@ -195,6 +195,12 @@
     if (it.owner_user) return ownerName(it.owner_user);
     return it.posted_by ? `공금 · ${ownerName(it.posted_by)} 당근` : '공금';
   }
+  // 위치 등록 목록의 한 줄 설명: (공금 검색이면) 이름 · 보관: 위치  — 이름·위치는 진하게
+  function locMeta(it) {
+    const b = t => `<b style="color:var(--ink2); font-weight:700; white-space:nowrap;">${esc(t)}</b>`;
+    const who = locOwner() === 'shared' ? b(ownerLabel(it)) + ' · ' : '';
+    return who + (it.location ? b('보관: ' + it.location) : '위치 없음');
+  }
   function ownerName(uid) {
     if (!uid) return '공금';
     const m = S.members.find(x => x.user_id === uid);
@@ -235,7 +241,7 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
-  const APP_VERSION = '11.25-3';
+  const APP_VERSION = '11.25-5';
   function errMsg(e) {
     const m = (e && (e.message || e.error_description || e.error)) || String(e);
     if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요';
@@ -624,7 +630,7 @@
     return (!q && L.mode === 'name' ? '<div class="muted" style="font-size:12px;">위치가 아직 없는 물건</div>' : '') +
       res.map(it => `<button class="pick-row" onclick="App.locAdd(${it.id})">
       ${zoomThumb(it)}<div class="grow"><div class="title">${esc(it.title)}</div>
-      <div class="muted">${locOwner() === 'shared' ? esc(ownerLabel(it)) + ' · ' : ''}${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div></div>
+      <div class="muted">${locMeta(it)}</div></div>
       <span class="pill">추가</span></button>`).join('');
   }
   // 보관 위치 이름 바꾸기 (고른 사람·공금의 위치만)
@@ -668,7 +674,7 @@
         <button class="pick-main" onclick="App.locToggle(${id})" aria-pressed="${on}" aria-label="${esc(it.title)} 선택">
           <span class="check">${on ? '✓' : ''}</span>${zoomThumb(it)}
           <div class="grow" style="min-width:0;"><div class="title">${esc(it.title)}</div>
-          <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locOwner() === 'shared' ? esc(ownerLabel(it)) + ' · ' : ''}${it.location ? '지금 ' + esc(it.location) : '위치 없음'}</div>
+          <div class="muted" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${locMeta(it)}</div>
           ${q !== it.quantity ? `<div style="font-size:12px; color: var(--blue-ink);">원래 ${it.quantity}개</div>` : ''}</div>
         </button>
         ${on ? `<div class="stepper sm">
