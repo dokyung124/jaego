@@ -243,7 +243,7 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
-  const APP_VERSION = '11.25-6';
+  const APP_VERSION = '11.25-7';
   function errMsg(e) {
     const m = (e && (e.message || e.error_description || e.error)) || String(e);
     if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요';
@@ -544,7 +544,7 @@
       ${it.image_url ? `<img class="hero" src="${esc(it.image_url)}" alt="" referrerpolicy="no-referrer">` : '<div class="hero">사진 없음</div>'}
       <div class="row" style="align-items:flex-start;">
         <div class="grow"><h2 style="margin:0; font-size:22px;">${esc(it.title)}</h2>
-          <p class="sub">${won(it.price)}${it.region ? ' · ' + esc(it.region) : ''}</p>
+          <p class="sub">${won(it.price)}${it.region ? ' · ' + esc(it.region) : ''}${it.posted_by && it.daangn_article_id ? ' · <b style="color:var(--ink2);">' + esc(ownerName(it.posted_by)) + ' 당근 판매글</b>' : ''}</p>
           ${!it.owner_user && it.posted_by ? `<p class="sub" style="color: var(--blue-ink);">공금 · ${esc(ownerName(it.posted_by))}님 당근 계정에 올라가 있어요</p>` : ''}</div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">${statusBadge(it)}${expiryBadge(it, true)}</div>
       </div>
