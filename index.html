@@ -957,11 +957,12 @@
     setOwner(id, uid) {
       const it = S.items.find(x => x.id === id);
       if (!it || (it.owner_user || '') === (uid || '')) return;
-      // 보관 위치는 사람·공금별로 따로라서, 주인이 바뀌면 위치를 비움
-      const hadLoc = !!it.location;
+      // 공금으로 옮기면 보관 위치도 그대로 가져가고, 다른 사람에게 넘길 때만 위치를 비움
+      const loc = it.location;
+      const toShared = !uid;
       withBusy(async () => {
-        await patchItem(id, { owner_user: uid || null, location: null });
-        if (hadLoc) toast('주인이 바뀌어서 보관 위치를 비웠어요');
+        await patchItem(id, { owner_user: uid || null, location: toShared ? loc : null });
+        if (loc) toast(toShared ? `공금 '${loc}' 위치로 옮겼어요` : '주인이 바뀌어서 보관 위치를 비웠어요');
       });
     },
     setQty(id, q) {
@@ -1187,11 +1188,12 @@
     moveQty(id, n, max) { S.moveQty[id] = Math.max(1, Math.min(n, max)); render(); },
     move(id, n) {
       withBusy(async () => {
-        const { error } = await sb.rpc('inv_move_to_shared', { p_item_id: id, p_qty: n });
+        const { data, error } = await sb.rpc('inv_move_to_shared', { p_item_id: id, p_qty: n });
         if (error) throw error;
         delete S.moveQty[id];
         await Promise.all([loadItems(), loadTransfers()]);
-        toast(`${n}개를 공금으로 옮겼어요`);
+        const loc = data && data.location;
+        toast(loc ? `${n}개를 공금으로 옮겼어요 · 위치: ${loc}` : `${n}개를 공금으로 옮겼어요`);
       });
     },
 
