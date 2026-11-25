@@ -113,6 +113,8 @@
   .pick-row.on .check { background: var(--blue); border-color: var(--blue); }
   .preview { width: 100%; max-height: 260px; object-fit: contain; border-radius: 12px; background: var(--line); }
   .thumb-zoom { display: inline-flex; flex-shrink: 0; border-radius: 10px; cursor: zoom-in; }
+  .modal-bg { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal { width: 100%; max-width: 340px; background: #fff; border-radius: 16px; padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 8px; }
   .viewer { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
     padding: calc(env(safe-area-inset-top) + 56px) 12px calc(env(safe-area-inset-bottom) + 24px); }
   .viewer img { max-width: 100%; max-height: calc(100% - 110px); min-height: 0; object-fit: contain; border-radius: 8px; }
@@ -241,7 +243,7 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
-  const APP_VERSION = '11.25-5';
+  const APP_VERSION = '11.25-6';
   function errMsg(e) {
     const m = (e && (e.message || e.error_description || e.error)) || String(e);
     if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요';
@@ -284,6 +286,19 @@
     if (!it.image_url) return thumb(it);
     return `<span class="thumb-zoom" role="button" tabindex="0" aria-label="사진 크게 보기"
       onclick="event.stopPropagation(); App.viewPhoto(${it.id})">${thumb(it)}</span>`;
+  }
+  // 수량을 0개로 만들 때 뜨는 확인 창
+  function soldAskHtml() {
+    return `<div class="modal-bg" onclick="if (event.target === this) App.soldCancel()">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="soldq">
+        <b id="soldq" style="font-size:18px;">모두 판매되었나요?</b>
+        <p class="muted" style="margin:0;">확인을 누르면 판매완료로 바뀌고 재고에서 빠져요.</p>
+        <div class="row" style="gap:8px; margin-top:6px;">
+          <button class="btn line grow" onclick="App.soldCancel()">취소</button>
+          <button class="btn grow" onclick="App.soldConfirm()">확인</button>
+        </div>
+      </div>
+    </div>`;
   }
   function viewerHtml() {
     const it = S.items.find(x => x.id === S.viewer);
@@ -554,12 +569,7 @@
             <button aria-label="수량 1개 늘리기" onclick="App.setQty(${it.id}, ${it.quantity + 1})">+</button>
           </div>
         </div>
-        <p class="muted" style="margin:0;">−/+ 는 누르면 바로 저장돼요. 개수를 잘못 셌을 때 고치는 용도예요.</p>
-      </div>
-
-      <div class="card" style="gap:8px;">
-        <div class="muted">물건을 팔았을 때</div>
-        <button class="btn sm line" onclick="App.sell(${it.id})" ${it.quantity < 1 || S.busy ? 'disabled' : ''}>1개 판매완료</button>
+        <p class="muted" style="margin:0;">−/+ 는 누르면 바로 저장돼요. 0개로 만들면 판매완료로 처리돼요.</p>
       </div>
 
       <div class="card">
@@ -768,7 +778,7 @@
   function render() {
     if (!S.session || !S.me) { $app.innerHTML = viewAuth(); return; }
     const v = { list: viewList, detail: viewDetail, connect: viewConnect, locate: viewLocate }[S.view] || viewList;
-    $app.innerHTML = v() + nav() + (S.viewer ? viewerHtml() : '');
+    $app.innerHTML = v() + nav() + (S.viewer ? viewerHtml() : '') + (S.soldAsk ? soldAskHtml() : '');
   }
 
   // ------------------------------------------------------------------
@@ -942,6 +952,9 @@
     },
     setQty(id, q) {
       if (q < 0) return;
+      // 0개로 만들면 바로 줄이지 않고 "모두 판매되었나요?" 창을 먼저 띄움
+      const cur = S.items.find(x => x.id === id);
+      if (q === 0 && cur && cur.quantity > 0) { S.soldAsk = id; render(); return; }
       withBusy(async () => {
         const it = S.items.find(x => x.id === id);
         const patch = { quantity: q };
@@ -969,6 +982,22 @@
       withBusy(async () => {
         await patchItem(id, { expiry_manual: false, details_fetched_at: null });
         toast('다음 동기화 때 판매글 기준으로 다시 불러와요');
+      });
+    },
+    soldCancel() { S.soldAsk = null; render(); },
+    // "모두 판매되었나요?" → 확인: 남은 개수 전부 판매완료 (판매 기록 남김, 되돌리기 가능)
+    soldConfirm() {
+      const id = S.soldAsk; S.soldAsk = null;
+      const it = S.items.find(x => x.id === id);
+      if (!it || it.quantity < 1) { render(); return; }
+      withBusy(async () => {
+        const n = it.quantity;
+        const { data, error } = await sb.rpc('inv_sell', { p_item_id: id, p_qty: n });
+        if (error) throw error;
+        const i = S.items.findIndex(x => x.id === id);
+        if (i >= 0) S.items[i] = data;
+        S.view = 'list'; S.hist = [];
+        showUndo('판매완료! 재고에서 빠졌어요', () => App.unsell(id));
       });
     },
     sell(id) {
