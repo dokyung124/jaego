@@ -957,12 +957,15 @@
     setOwner(id, uid) {
       const it = S.items.find(x => x.id === id);
       if (!it || (it.owner_user || '') === (uid || '')) return;
-      // 공금으로 옮기면 보관 위치도 그대로 가져가고, 다른 사람에게 넘길 때만 위치를 비움
-      const loc = it.location;
-      const toShared = !uid;
+      // 서버에서 처리: 그 주인에게 같은 물건이 이미 있으면 합치지 않고 원래 것을 지운 뒤 이 물건을 옮김
+      const name = uid ? ownerName(uid) : '공금';
       withBusy(async () => {
-        await patchItem(id, { owner_user: uid || null, location: toShared ? loc : null });
-        if (loc) toast(toShared ? `공금 '${loc}' 위치로 옮겼어요` : '주인이 바뀌어서 보관 위치를 비웠어요');
+        const { error } = await sb.rpc('inv_set_owner', { p_item_id: id, p_owner: uid || null });
+        if (error) throw error;
+        await loadItems();
+        const now = S.items.find(x => x.id === id);
+        const loc = now && now.location;
+        toast(`${name} 재고로 옮겼어요${loc ? ` · 위치: ${loc}` : ''}`);
       });
     },
     setQty(id, q) {
