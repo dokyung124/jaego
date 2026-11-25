@@ -75,6 +75,7 @@
   .b-blue { background: var(--blue-bg); color: var(--blue-ink); }
   .b-orange { background: var(--orange-bg); color: var(--orange-ink); }
   .b-gray { background: var(--gray-bg); color: var(--ink2); }
+  .b-shared { background: #E7F6EC; color: #1E7A3E; }
   .b-dark { background: var(--ink); color: #fff; }
   .b-red { background: #FDECEA; color: var(--red); }
   .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -243,7 +244,7 @@
     t.textContent = msg; t.classList.add('show');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
   }
-  const APP_VERSION = '11.25-7';
+  const APP_VERSION = '11.25-9';
   function errMsg(e) {
     const m = (e && (e.message || e.error_description || e.error)) || String(e);
     if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요';
@@ -395,12 +396,19 @@
   // 보관 위치 목록 (판매 중인 물건 기준, 숫자는 자연스러운 순서로)
   // 보관 위치는 A님 / B님 / 공금이 각자 따로 가짐 (ownerKey: 사람 id 또는 'shared')
   function ownerKey(it) { return it.owner_user || 'shared'; }
+  // 홈 탭에 보일지: 사람 탭에는 그 사람 물건 + 그 사람 당근에 올라간 공금 물건(공금으로 표시)
+  function inOwnerTab(it, owner) {
+    if (owner === 'all') return true;
+    if (owner === 'shared') return !it.owner_user;
+    return it.owner_user === owner || (!it.owner_user && it.posted_by === owner);
+  }
   function ownerKeyName(k) { return k === 'shared' ? '공금' : ownerName(k); }
-  function locations(ok) {
+  function locations(ok, postedBy) {
     const set = new Set();
     for (const it of S.items) {
       if (!it.location || !(it.status === '판매중' || it.status === '예약중')) continue;
       if (ok && ownerKey(it) !== ok) continue;
+      if (postedBy && it.posted_by !== postedBy) continue;
       set.add(it.location);
     }
     return [...set].sort(locCompare);
@@ -420,18 +428,22 @@
   function locFilterHtml() {
     const f = S.filter;
     const active = it => it.status === '판매중' || it.status === '예약중';
-    const keys = f.owner === 'all'
-      ? [...membersMeFirst().map(m => m.user_id), 'shared'].filter(k => locations(k).length)
-      : [f.owner].filter(k => locations(k).length);
+    // 사람 탭: 그 사람 위치 + (그 사람 당근에 올라간) 공금 물건의 공금 위치
+    const person = f.owner !== 'all' && f.owner !== 'shared' ? f.owner : null;
+    const locsOf = k => locations(k, person && k === 'shared' ? person : undefined);
+    const keys = (f.owner === 'all'
+      ? [...membersMeFirst().map(m => m.user_id), 'shared']
+      : person ? [person, 'shared'] : [f.owner]).filter(k => locsOf(k).length);
     if (!keys.length) return '';
-    const label = !f.loc ? '전체' : (f.loc === '__none' ? '위치 없음' : f.loc) + (f.owner === 'all' && f.locOwner ? ` (${ownerKeyName(f.locOwner)})` : '');
+    const grouped = f.owner === 'all' || (person && keys.includes('shared'));
+    const label = !f.loc ? '전체' : (f.loc === '__none' ? '위치 없음' : f.loc) + (grouped && f.locOwner ? ` (${ownerKeyName(f.locOwner)})` : '');
     const btn = (k, v, text) => `<button class="chip ${f.loc === v && (!v || f.locOwner === k) ? 'on' : ''}" data-loc="${esc(v)}" data-owner="${esc(k)}" onclick="App.locFilter(this.dataset.loc, this.dataset.owner)">${esc(text)}</button>`;
     const panel = !S.locOpen ? '' : `<div class="card" style="padding:12px 14px; gap:8px;">
       <div class="locs">${btn('', '', '전체 위치')}</div>
       ${keys.map(k => {
-        const noLoc = S.items.some(it => active(it) && ownerKey(it) === k && !it.location);
-        return `${f.owner === 'all' ? `<div class="muted" style="font-size:12px;">${esc(ownerKeyName(k))}</div>` : ''}
-          <div class="locs">${locations(k).map(l => btn(k, l, l)).join('')}${noLoc ? btn(k, '__none', '위치 없음') : ''}</div>`;
+        const noLoc = S.items.some(it => active(it) && ownerKey(it) === k && inOwnerTab(it, f.owner) && !it.location);
+        return `${grouped ? `<div class="muted" style="font-size:12px;">${esc(ownerKeyName(k))}</div>` : ''}
+          <div class="locs">${locsOf(k).map(l => btn(k, l, l)).join('')}${noLoc ? btn(k, '__none', '위치 없음') : ''}</div>`;
       }).join('')}
     </div>`;
     return `<button class="loc-toggle ${f.loc ? 'on' : ''}" onclick="App.locToggleOpen()" aria-expanded="${!!S.locOpen}">
@@ -445,8 +457,7 @@
       if (f.status === 'active' && !active) return false;
       if (f.status === 'soon' && !(active && isSoon(it))) return false;
       if (f.status === '예약중' && it.status !== '예약중') return false;
-      if (f.owner === 'shared' && it.owner_user) return false;
-      if (f.owner !== 'all' && f.owner !== 'shared' && it.owner_user !== f.owner) return false;
+      if (!inOwnerTab(it, f.owner)) return false;
       if (f.loc && f.locOwner && ownerKey(it) !== f.locOwner) return false;
       if (f.loc === '__none' && it.location) return false;
       if (f.loc && f.loc !== '__none' && it.location !== f.loc) return false;
@@ -471,14 +482,14 @@
           ${it.expiry_date ? `<div class="muted">기한 ${fmtYMD(it.expiry_date)}</div>` : ''}
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0;">
-          <div class="qty">${it.quantity}개</div>${statusBadge(it)}${expiryBadge(it)}
+          <div class="qty">${it.quantity}개</div>${!it.owner_user && S.filter.owner !== 'shared' ? '<span class="badge b-shared">공금</span>' : ''}${statusBadge(it)}${expiryBadge(it)}
         </div>
       </button>`).join('');
   }
   function viewList() {
     // 위쪽 숫자는 고른 사람(또는 공금) 물건만 셈. 전체를 고르면 모두
     const f0 = S.filter;
-    const mine = it => f0.owner === 'all' || ownerKey(it) === f0.owner;
+    const mine = it => inOwnerTab(it, f0.owner);
     const active = S.items.filter(it => mine(it) && (it.status === '판매중' || it.status === '예약중')).length;
     const last = S.members.map(m => m.last_synced_at).filter(Boolean).sort().pop();
     const f = S.filter;
@@ -598,6 +609,7 @@
         <label class="field">당근 프로필 링크
           <input class="input" id="link-${m.user_id}" placeholder="https://www.daangn.com/u/..." value="${esc(m.daangn_profile_url || '')}"></label>
         <button class="btn sm" onclick="App.sync('${m.user_id}')" ${S.busy ? 'disabled' : ''}>가져오기</button>
+        ${breakdownHtml(m)}
       </div>`).join('');
 
     const runRow = r => {
@@ -1194,6 +1206,53 @@
     const { data } = await sb.from('inv_sync_runs').select('*').order('started_at', { ascending: false }).limit(1);
     S.runs = data || [];
     if (S.view === 'connect') render();
+    loadBreakdown();
+  }
+
+  // 지난 동기화에서 확인한 판매글이 지금 어디에 있는지 (내 재고 / 공금 / 다른 사람 / 판매완료 / 숨김)
+  async function loadBreakdown() {
+    const out = {};
+    for (const m of S.members) {
+      if (!m.last_synced_at) continue;
+      const { data, error } = await sb.from('inv_items')
+        .select('id, title, owner_user, status, quantity, daangn_article_id, last_seen_at, photo_note')
+        .eq('posted_by', m.user_id).not('daangn_article_id', 'is', null);
+      if (error) continue;
+      const since = new Date(new Date(m.last_synced_at).getTime() - 10 * 60000).toISOString();
+      const byArt = new Map();
+      for (const r of data || []) {
+        if (!r.last_seen_at || r.last_seen_at < since) continue;
+        const list = byArt.get(r.daangn_article_id) || [];
+        list.push(r); byArt.set(r.daangn_article_id, list);
+      }
+      const groups = { mine: [], shared: [], other: [], sold: [], hidden: [] };
+      for (const rows of byArt.values()) {
+        const live = rows.filter(r => r.status === '판매중' || r.status === '예약중');
+        const t = rows[0].title;
+        if (live.some(r => r.owner_user === m.user_id)) groups.mine.push(t);
+        else if (live.some(r => !r.owner_user)) { groups.mine.push(t); groups.shared.push(t); }
+        else if (live.length) groups.other.push(t + ' → ' + ownerName(live[0].owner_user));
+        else if (rows.some(r => r.status === '판매완료')) groups.sold.push(t);
+        else groups.hidden.push(t + (rows.find(r => r.photo_note)?.photo_note === '다른 사람 판매글이라 숨김' ? ' (남의 글로 보여 숨김)' : ''));
+      }
+      out[m.user_id] = { total: byArt.size, ...groups };
+    }
+    S.breakdown = out;
+    if (S.view === 'connect') render();
+  }
+  function breakdownHtml(m) {
+    const b = (S.breakdown || {})[m.user_id];
+    if (!b) return '';
+    const part = (label, list, note) => list.length ? `<details style="margin-top:6px;"><summary style="cursor:pointer;">${label} <b>${list.length}개</b>${note ? ` <span class="muted">· ${note}</span>` : ''}</summary>
+      <div class="muted" style="font-size:13px; line-height:1.6; padding:6px 0 0 14px;">${list.slice(0, 60).map(esc).join('<br>')}${list.length > 60 ? `<br>… 외 ${list.length - 60}개` : ''}</div></details>` : '';
+    return `<div style="border-top:1px solid var(--line); padding-top:10px; font-size:14px;">
+      <div>지난 동기화에서 확인한 판매글 <b>${b.total}개</b>가 지금 있는 곳</div>
+      <div style="margin-top:6px;">${esc(m.display_name)} 재고 <b>${b.mine.length}개</b></div>
+      ${part('└ 그중 공금', b.shared, '공금으로 옮겼지만 내 당근에 올라간 글')}
+      ${part('다른 사람 재고', b.other, '누구 물건인지를 바꾼 글')}
+      ${part('판매완료로 처리됨', b.sold, '당근엔 판매중인데 앱에서 0개로 만든 글')}
+      ${part('숨김', b.hidden, '공금으로 다 옮겼거나 남의 글로 보인 글')}
+    </div>`;
   }
 
   // ------------------------------------------------------------------
